@@ -95,6 +95,16 @@ impl TakoApp {
         if s.pages.settings.startup == "chats" {
             s.view = View::Chats; // Settings → General → Open on startup
         }
+        if std::env::var("TAKO_SNAP").is_err() {
+            let marker = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/tako/onboarded");
+            if !marker.exists() || std::env::var("TAKO_ONBOARDING").is_ok() {
+                if let Some(dir) = marker.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                let _ = std::fs::write(&marker, "1");
+                s.open_onboarding(window, cx);
+            }
+        }
         crate::snap::setup(&mut s, window, cx);
         s
     }
@@ -341,17 +351,20 @@ impl Render for TakoApp {
         let t = cx.t();
         let view = self.view;
         let empty = self.is_empty_layout();
-        let show_sidebar = !empty && self.sidebar_open;
-        let show_right = !empty && self.right_open;
+        // While the onboarding covers the window the app behind isn't drawn (the mock
+        // hides .app), so the shared backdrop entity is only rendered once.
+        let covered = self.onboarding_covers();
+        let show_sidebar = !covered && !empty && self.sidebar_open;
+        let show_right = !covered && !empty && self.right_open;
 
-        let main: AnyElement = match view {
+        let main: AnyElement = if covered { div().into_any_element() } else { match view {
             View::Home => self.render_home(window, cx).into_any_element(),
             View::Chats => self.render_chat(window, cx).into_any_element(),
             View::Automations => self.render_automations(window, cx).into_any_element(),
             View::Plugins => self.render_plugins(window, cx).into_any_element(),
             View::Settings => self.render_settings(window, cx).into_any_element(),
             View::Stats => self.render_stats(window, cx).into_any_element(),
-        };
+        } };
 
         div()
             .id("tako")
@@ -382,7 +395,7 @@ impl Render for TakoApp {
             // Browsers use line-height: normal (~1.2 for Inter); GPUI defaults to 1.618.
             .line_height(relative(1.21))
             .flex()
-            .child(self.render_rail(cx))
+            .when(!covered, |d| d.child(self.render_rail(cx)))
             .when(show_sidebar, |d| d.child(self.render_sidebar(window, cx)))
             .child(
                 div()
@@ -394,7 +407,7 @@ impl Render for TakoApp {
                     .child(main),
             )
             .when(show_right, |d| d.child(self.render_right(window, cx)))
-            .child(self.render_titlebar(window, cx))
+            .when(!covered, |d| d.child(self.render_titlebar(window, cx)))
             .children(self.render_overlays(window, cx))
             .children(self.render_new_project(window, cx))
             .children(self.render_toast(window, cx))

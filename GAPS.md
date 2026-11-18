@@ -131,3 +131,16 @@ Running list of things that could not be matched 1:1, and what was done instead.
 - `.pl-fcard:hover` lifts by 2px instantly (no transform transition); the dot
   pattern is painted as small rounded quads, not a radial-gradient.
 - Installed plugins aren't persisted between launches.
+## Scenes: Peaks / Glade / Valley
+- All three are now ported (same seeds/RNG and noise), which replaces the "not ported yet"
+  bullet under Scenes above.
+- Valley's theme: `Scene::build` gets no `cx`, so the light/dark palette comes from
+  `scene::valley::set_light(bool)` (dark by default). Both palettes are ported. The mock
+  rebuilds Valley when `data-theme` changes; here the engine still has to call `set_light` and
+  rebuild (e.g. key the build on `cx.t().light` in `Backdrop`).
+- Valley's lake reflection: the mock copies the canvas back into itself row by row. Here the
+  sky and the three ranges each have a mirrored copy, pre-mixed with the water at `waterAlpha`,
+  drawn as row strips with the same wobble and per-layer parallax. Clouds, stars and birds
+  aren't mirrored. In the mock they only reach the lake's bottom rows now and then.
+- Glade's sun shafts use `screen` in the mock and are drawn source-over here. The rays are
+  near-white, so the difference is small.

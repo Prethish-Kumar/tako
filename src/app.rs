@@ -25,7 +25,7 @@ pub enum View {
     Stats,
 }
 
-actions!(tako, [OpenSettings, ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
+actions!(tako, [Dismiss, OpenSettings, ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
 
 #[derive(Clone, PartialEq, gpui_kit::Action)]
 #[action(namespace = tako, no_json)]
@@ -38,6 +38,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-n", NewChat, None),
         KeyBinding::new("cmd-k", FocusSearch, None),
         KeyBinding::new("cmd-t", NewTab, None),
+        KeyBinding::new("escape", Dismiss, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-w", CloseTab, None),
         KeyBinding::new("cmd-shift-]", NextTab, None),
@@ -144,6 +145,23 @@ impl TakoApp {
             }
             "newtab" => self.open_tab(crate::chat::TabKind::NewTab, "New Tab", cx),
             "nosidebar" => self.sidebar_open = false,
+            "dump" => {
+                let tab = self.chat.tabs.iter().find(|t| t.id == self.chat.active_tab).map(|t| t.name.clone()).unwrap_or_default();
+                eprintln!(
+                    "STATE {v}: view={:?} thread={} tab={tab} collapsed={:?} theme_open={} profile_open={} ctx_open={:?} scene={} pal={} sidebar={} right={} np={}",
+                    self.view,
+                    self.active,
+                    self.sidebar.collapsed,
+                    self.overlays.theme.open,
+                    self.overlays.profile.open,
+                    self.ctx.open,
+                    self.scene.id,
+                    cx.global::<ThemeState>().pal,
+                    self.sidebar_open,
+                    self.right_open,
+                    self.sidebar.np.is_some()
+                );
+            }
             "search" => {
                 self.toggle_search(window, cx);
                 if !v.is_empty() {
@@ -397,6 +415,20 @@ impl Render for TakoApp {
             .on_action(cx.listener(|this, _: &FocusSearch, window, cx| this.toggle_search(window, cx)))
             .on_action(cx.listener(|this, _: &NewTab, _, cx| this.tab_key("t", false, cx)))
             .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.go(View::Settings, cx)))
+            // Escape closes whatever menu / popover / dialog is open (the mock's Escape handlers).
+            .on_action(cx.listener(|this, _: &Dismiss, _, cx| {
+                this.ctx.open = None;
+                this.overlays.theme.open = false;
+                this.overlays.profile.open = false;
+                this.sidebar.menu = None;
+                this.sidebar.picker = None;
+                this.sidebar.new_label = None;
+                this.sidebar.np = None;
+                if this.sidebar.sel_mode {
+                    this.set_sel_mode(false, cx);
+                }
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.tab_key("w", false, cx)))
             .on_action(cx.listener(|this, _: &NextTab, _, cx| this.tab_key("]", true, cx)))
             .on_action(cx.listener(|this, _: &PrevTab, _, cx| this.tab_key("[", true, cx)))

@@ -32,6 +32,14 @@ pub fn setup(app: &mut TakoApp, window: &mut Window, cx: &mut Context<TakoApp>) 
             }
             // Real input, through GPUI's own dispatch (hit-testing / key contexts included):
             //   key:cmd-]      click:x,y (logical px)
+            if a == "draw" {
+                cx.update(|window, cx| {
+                    window.refresh();
+                    let _ = window.draw(cx);
+                })
+                .ok();
+                continue;
+            }
             if let Some(k) = a.strip_prefix("key:") {
                 let k: &'static str = Box::leak(k.to_string().into_boxed_str());
                 cx.update(|window, cx| {

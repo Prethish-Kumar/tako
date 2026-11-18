@@ -612,6 +612,19 @@ impl Render for OnbView {
             Some(c) => 1. - bezier(0.6, 0., 0.4, 1., c.elapsed().as_secs_f32() / 0.9),
             None => css_ease(self.opened_at.elapsed().as_secs_f32() / 1.1),
         };
+        // onbOut: the mock scales the overlay to 1.04 while it fades. The story and the
+        // frozen wipe are our own drawing, so zoom them around the window centre.
+        let zoom = match self.closing {
+            Some(c) => 1. + 0.04 * bezier(0.6, 0., 0.4, 1., c.elapsed().as_secs_f32() / 0.9),
+            None => 1.,
+        };
+        let zb = move |b: Bounds<Pixels>| -> Bounds<Pixels> {
+            if zoom == 1. {
+                return b;
+            }
+            let (w, h) = (b.size.width * zoom, b.size.height * zoom);
+            Bounds { origin: point(b.origin.x - (w - b.size.width) / 2., b.origin.y - (h - b.size.height) / 2.), size: size(w, h) }
+        };
         let trash = std::mem::take(&mut self.trash);
         let mut root = div()
             .id("onb")
@@ -663,7 +676,7 @@ impl Render for OnbView {
                         .absolute()
                         .inset_0()
                         .when(ps[i].opacity < 1., |d| d.opacity(ps[i].opacity))
-                        .child(canvas(|_, _, _| (), move |b, _, window, _| px::paint_ops(&ps[i].ops, b, unit, window)).size_full()),
+                        .child(canvas(|_, _, _| (), move |b, _, window, _| px::paint_ops(&ps[i].ops, zb(b), unit * zoom, window)).size_full()),
                 );
             }
         }
@@ -672,7 +685,7 @@ impl Render for OnbView {
             root = root.child(
                 canvas(|_, _, _| (), move |b, _, window, _| {
                     let t = Instant::now();
-                    w.paint(b, window);
+                    w.paint(zb(b), window);
                     if prof {
                         eprintln!("onb wipe paint: {:?}", t.elapsed());
                     }

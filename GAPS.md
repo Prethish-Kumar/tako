@@ -8,8 +8,10 @@ Almost every gap below comes from one of these:
 
 1. **No additive / screen blending.** Glows, god rays, aurora, neon and the wipe's glowing
    cells use normal alpha blending, so they read a bit flatter than the mock's `lighter`.
-2. **No CSS filters or backdrop blur.** Frosted panels are solid; fade-outs and word rises
-   are opacity-only (no `blur()`), and there are no `transform: scale()` transitions on divs.
+2. **No CSS `filter: blur()` or `transform: scale()` on elements.** The mock runs in its
+   *flat* style, which sets `backdrop-filter: none` on every element, so the mock has no
+   frosted panels to match. What remains is the brief `blur(8px)`→0 on a few entrance
+   animations (word rises, `rise`) and small popover scale-ins; those are opacity/slide only.
 3. **No gradient-clipped text, letter-spacing or balanced wrapping in the text engine.**
    Worked around: the "Thinking" shimmer colours each glyph from the moving band, and the
    uppercase labels are tracked by laying characters out one by one (`ui::tracked`). Large
@@ -53,8 +55,8 @@ child view would also sit above every GPUI popover.
   measured heights settle).
 
 ## Home
-- The heatmap card's frosted glass (`backdrop-filter: blur(18px) saturate(1.3)`) can't be done;
-  it is a flat `panel-solid` at 74% alpha.
+- The heatmap card: the mock's flat style disables its `backdrop-filter`, so a solid
+  translucent panel is a match, not a gap.
 - `rise` entrance: opacity + 16px lift only, the `blur(8px)` → 0 part is dropped.
 - The light sweep over the grid uses `mix-blend-mode: overlay` in the mock; here it is a plain
   7% white gradient band (painted as two 2-stop gradients, since GPUI gradients have 2 stops).
@@ -88,7 +90,7 @@ child view would also sit above every GPUI popover.
 - "Reset this mockup" resets settings, usage and theme to their seeds instead of reloading.
 
 ## Profile menu, Stats, signed-out
-- Profile popover: no `backdrop-filter: blur(24px) saturate(1.4)`; the 94% panel colour is used as-is.
+- Profile popover: the mock's flat style disables its `backdrop-filter`, so the solid panel matches.
   The open transition (fade + 6px slide) is ported, the scale(.98) and the close transition are not
   (the menu disappears immediately). Offscreen snapshots skip the entrance (they draw a single frame).
 - Stats KPI glow (`radial-gradient(closest-side, accent 14%, transparent)`): approximated with 18

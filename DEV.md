@@ -11,6 +11,9 @@ GPUI (`gpui-pre` 0.3.12) + gpui-component via `gpui-kit` 0.10.
 - Actions (`TAKO_ACT`, `;`-separated): `send:text`, `open:<thread id>`, `fold:<project>`,
   `tab:<n>`, `theme`, `profile`, `nosidebar`, `noright`, `wait:<ms>`, `scene:<id>`,
   plus anything a module handles in its own `act()` function.
+- `scripts/smoke.sh` drives the app with real mouse clicks / keystrokes (`click:x,y`, `key:cmd-]`)
+  through GPUI's own hit-testing and prints the state after each step (`dump:<label>`).
+  It's slowish: macOS App Nap throttles timers in a window-less app.
 - Reference screenshots of the mock at 1440×900 (downscaled to 800×500) are in `ref/`.
   The mock source is `ref/ade.html` — CSS (top) and JS sections are labelled with
   banner comments (`grep -n "^   [A-Z]" ref/ade.html`). Port behaviour and sizes

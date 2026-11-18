@@ -585,14 +585,39 @@ impl TakoApp {
         }
 
         let open = self.chat.open_tools.clone();
+        // CSS collapses adjacent vertical margins; GPUI doesn't, so do it here:
+        // the gap above a block is max(prev.margin-bottom, this.margin-top).
+        let margins = |b: &Block| -> (f32, f32) {
+            match b {
+                Block::User { .. } => (22., 28.),
+                Block::Text(_) => (14., 14.),
+                Block::Tool { .. } => (4., 4.),
+                Block::Thinking => (0., 0.),
+            }
+        };
+        let mut prev_mb = 0.;
+        let n_items = self.chat.items.len();
+        let gaps: Vec<(f32, f32)> = self
+            .chat
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, it)| {
+                let (mt, mb) = margins(&it.block);
+                let top = if i == 0 { mt } else { mt.max(prev_mb) };
+                prev_mb = mb;
+                (top, if i + 1 == n_items { mb } else { 0. })
+            })
+            .collect();
         let items: Vec<AnyElement> = self
             .chat
             .items
             .iter()
-            .map(|it| {
+            .zip(gaps)
+            .map(|(it, (gt, gb))| {
                 let el = block_view(&it.block, it.key, open.contains(&it.key), t, cx).into_any_element();
                 let natural = it.h.clone();
-                let inner = div().relative().flex_none().child(el).child(measurer(natural.clone()));
+                let inner = div().relative().flex_none().pt(px(gt)).pb(px(gb)).child(el).child(measurer(natural.clone()));
                 if let Some((tw, j)) = &it.enter {
                     let ms = tw.start.elapsed().as_secs_f32() * 1000.;
                     let hp = ease_snappy(((ms - 40. * *j as f32) / 300.).clamp(0., 1.));
@@ -732,8 +757,6 @@ fn block_view(b: &Block, key: usize, open: bool, t: Theme, cx: &mut Context<Tako
             .flex()
             .flex_col()
             .items_end()
-            .mt(px(22.))
-            .mb(px(28.))
             .when(*steer, |d| d.child(div().flex().items_center().gap(px(6.)).mb(px(8.)).text_size(px(13.)).text_color(t.text_2).child(icon("steer", 14., t.text_2)).child("Steering conversation")))
             .child(
                 div()
@@ -750,12 +773,7 @@ fn block_view(b: &Block, key: usize, open: bool, t: Theme, cx: &mut Context<Tako
             .into_any_element(),
         Block::Text(s) => {
             let italic = s.starts_with('_') && s.ends_with('_');
-            div()
-                .my(px(14.))
-                .line_height(relative(1.7))
-                .when(italic, |d| d.text_color(t.text_3).italic())
-                .child(rich_text(s.trim_matches('_'), t.text, t.surface_active))
-                .into_any_element()
+            rich_par(s.trim_matches('_'), if italic { t.text_3 } else { t.text }, t, 14., 1.7).when(italic, |d| d.italic()).into_any_element()
         }
         Block::Tool { label, body, running, icon: ic } => {
             let body = body.clone();
@@ -771,7 +789,6 @@ fn block_view(b: &Block, key: usize, open: bool, t: Theme, cx: &mut Context<Tako
                         .px(px(8.))
                         .py(px(6.))
                         .mx(px(-8.))
-                        .my(px(4.))
                         .rounded(px(8.))
                         .text_color(t.text_2)
                         .hover(|s| s.bg(t.surface).text_color(t.text))

@@ -110,3 +110,49 @@ impl Tween {
         self.start.elapsed().as_secs_f32() * 1000. >= self.ms + self.delay_ms
     }
 }
+
+/// A paragraph with `code` spans as real chips (smaller mono, rounded, padded).
+/// GPUI text runs can't change size or add padding, so words become inline
+/// flex items that wrap like text.
+pub fn rich_par(text: &str, color: Hsla, t: crate::theme::Theme, size: f32, lh: f32) -> Div {
+    let mut d = div().flex().flex_wrap().items_baseline().text_size(px(size)).text_color(color).line_height(px(size * lh));
+    let mut code = false;
+    for (i, seg) in text.split('`').enumerate() {
+        if i > 0 {
+            code = !code;
+        }
+        if seg.is_empty() {
+            continue;
+        }
+        if code {
+            d = d.child(
+                div()
+                    .font_family(MONO)
+                    .text_size(px(12.5))
+                    .px(px(6.))
+                    .mx(px(2.))
+                    .rounded(px(5.))
+                    .bg(t.surface_active)
+                    .line_height(px(size * 1.45))
+                    .child(seg.to_string()),
+            );
+        } else {
+            // keep spaces attached to the preceding word so wrapping matches text
+            let mut words: Vec<String> = vec![];
+            let mut cur = String::new();
+            for ch in seg.chars() {
+                cur.push(ch);
+                if ch == ' ' {
+                    words.push(std::mem::take(&mut cur));
+                }
+            }
+            if !cur.is_empty() {
+                words.push(cur);
+            }
+            for w in words {
+                d = d.child(div().whitespace_nowrap().child(w));
+            }
+        }
+    }
+    d
+}

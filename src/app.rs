@@ -278,6 +278,8 @@ impl Render for TakoApp {
             .text_color(t.text)
             .font_family(FONT)
             .text_size(px(14.))
+            // Browsers use line-height: normal (~1.2 for Inter); GPUI defaults to 1.618.
+            .line_height(relative(1.21))
             .flex()
             .child(self.render_rail(cx))
             .when(show_sidebar, |d| d.child(self.render_sidebar(window, cx)))

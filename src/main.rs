@@ -2,6 +2,7 @@
 mod app;
 mod assets;
 mod chat;
+mod ctx;
 mod data;
 mod home;
 mod overlays;

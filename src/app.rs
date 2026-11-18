@@ -25,7 +25,7 @@ pub enum View {
     Stats,
 }
 
-actions!(tako, [ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
+actions!(tako, [OpenSettings, ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
 
 #[derive(Clone, PartialEq, gpui_kit::Action)]
 #[action(namespace = tako, no_json)]
@@ -38,6 +38,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-n", NewChat, None),
         KeyBinding::new("cmd-k", FocusSearch, None),
         KeyBinding::new("cmd-t", NewTab, None),
+        KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-w", CloseTab, None),
         KeyBinding::new("cmd-shift-]", NextTab, None),
         KeyBinding::new("cmd-shift-[", PrevTab, None),
@@ -63,6 +64,7 @@ pub struct TakoApp {
     pub pages: PagesState,
     pub overlays: OverlayState,
     pub scene: SceneState,
+    pub ctx: crate::ctx::CtxState,
     animating_theme: bool,
 }
 
@@ -83,6 +85,7 @@ impl TakoApp {
             pages: PagesState::new(window, cx),
             overlays: OverlayState::new(window, cx),
             scene: SceneState::new(),
+            ctx: crate::ctx::CtxState::new(),
             threads,
             animating_theme: false,
         };
@@ -120,6 +123,11 @@ impl TakoApp {
                 }
             }
             "group" => self.sidebar.group_by_label = v == "label",
+            "ctx" => {
+                let k: &'static str = match v { "access" => "access", "env" => "env", "project" => "project", "branch" => "branch", _ => "model" };
+                self.open_ctx(k, window, cx);
+            }
+            "toast" => self.toast(v.to_string(), cx),
             "select" => {
                 self.set_sel_mode(true, cx);
                 for id in v.split(',').filter_map(|s| s.parse().ok()) {
@@ -314,6 +322,7 @@ impl Render for TakoApp {
             .on_action(cx.listener(|this, _: &NewChat, _, cx| this.go(View::Home, cx)))
             .on_action(cx.listener(|this, _: &FocusSearch, window, cx| this.toggle_search(window, cx)))
             .on_action(cx.listener(|this, _: &NewTab, _, cx| this.tab_key("t", false, cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.go(View::Settings, cx)))
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.tab_key("w", false, cx)))
             .on_action(cx.listener(|this, _: &NextTab, _, cx| this.tab_key("]", true, cx)))
             .on_action(cx.listener(|this, _: &PrevTab, _, cx| this.tab_key("[", true, cx)))
@@ -340,5 +349,6 @@ impl Render for TakoApp {
             .child(self.render_titlebar(window, cx))
             .children(self.render_overlays(window, cx))
             .children(self.render_new_project(window, cx))
+            .children(self.render_toast(window, cx))
     }
 }

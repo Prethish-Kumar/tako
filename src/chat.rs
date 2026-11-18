@@ -633,7 +633,7 @@ impl TakoApp {
             )
     }
 
-    pub fn render_composer(&mut self, home: bool, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    pub fn render_composer(&mut self, home: bool, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.t();
         let running = !home && self.chat.running;
         let ready = !self.chat.input.read(cx).value().trim().is_empty();
@@ -693,31 +693,7 @@ impl TakoApp {
                                     ),
                             ),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.))
-                            .px(px(10.))
-                            .py(px(7.))
-                            .text_size(px(13.))
-                            .overflow_hidden()
-                            .child(chip("c-access").child(icon("lock", 14., t.text_2)).child("Full access"))
-                            .child(chip("c-machine").child(icon("laptop", 14., t.text_2)).child("My MacBook"))
-                            .child(sep())
-                            .child(chip("c-proj").when_some(proj.clone(), |d, p| d.child(pix(p.icon, 14.))).child(proj.map(|p| p.name).unwrap_or("tako")))
-                            .child(sep())
-                            .child(chip("c-branch").child(icon("branch", 14., t.text_2)).child(if home { "main".to_string() } else { th.branch.clone() }))
-                            .child(div().flex_1().min_w(px(8.)))
-                            .child(
-                                chip("c-model")
-                                    .child(icon("spark", 14., t.accent))
-                                    .child(div().font_weight(FontWeight::SEMIBOLD).text_color(t.text).child("Opus 5.5"))
-                                    .child(div().text_color(t.text_3).child("High")),
-                            )
-                            // the mock's .ctx-ring collapses to 0 width here; keep it out of the strip
-                            .when(false, |d| d.child(ctx_ring(t, 0.1))),
-                    ),
+                    .child(self.render_ctx_chips(window, cx)),
             ),
         )
     }

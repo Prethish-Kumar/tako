@@ -204,13 +204,9 @@ impl TakoApp {
                         this.go(View::Settings, cx);
                     })),
             )
-            .child(item("pf-intro", "play", "Replay intro", false).on_click(cx.listener(|this, _, _, cx| {
+            .child(item("pf-intro", "play", "Replay intro", false).on_click(cx.listener(|this, _, window, cx| {
                 this.overlays.profile.open = false;
-                // HOOK(onboarding): the mock calls window.forgeOnboarding.open().
-                // overlays/onboarding.rs owns the story; if it grows an
-                // `open_onboarding(cx)` that resets the beat, call it here instead.
-                this.overlays.onboarding.open = true;
-                cx.notify();
+                this.open_onboarding(window, cx);
             })))
             .child(div().h(px(1.)).bg(t.border).mx(px(4.)).my(px(6.)))
             .child(item("pf-logout", "logout", "Log out", true).on_click(cx.listener(|this, _, _, cx| this.sign_out(cx))))

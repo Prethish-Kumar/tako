@@ -154,7 +154,7 @@ impl TakoApp {
 /// * `onboarding` — open at beat I
 /// * `onb:<0-3>`  — jump to a beat and run the world 150 × 1/30 s (the mock's `go(i)`)
 /// * `onb:live`   — enter the live final step now (wipe from the story)
-/// * `onb:close`  — close (fade out)
+/// * `onb:close`  — close (fade out); `onb:next` / `onb:back` — the buttons
 /// * `onbscene:<id>` — click a scene pill on the final step
 pub fn act(app: &mut TakoApp, k: &str, v: &str, window: &mut Window, cx: &mut Context<TakoApp>) -> bool {
     match k {
@@ -171,6 +171,8 @@ pub fn act(app: &mut TakoApp, k: &str, v: &str, window: &mut Window, cx: &mut Co
                     o.enter_live(w * 0.62, h * 0.42, window);
                 }
                 ("onb", "close") => o.close(window, cx),
+                ("onb", "next") => o.next(window, cx),
+                ("onb", "back") => o.set_step(o.step.saturating_sub(1), false, window),
                 ("onb", n) => o.go(n.parse().unwrap_or(0), window),
                 (_, id) => o.pick_scene(id, None, window),
             });
@@ -310,13 +312,11 @@ impl OnbView {
         }
         if self.live {
             // freeze a snapshot of the live backdrop over everything while we fade
-            let (vw, vh) = vsize(window);
-            self.start_wipe_from_scene(self.cur_scene(cx), 0., 0., self.pick, window);
+            self.start_wipe_from_scene(self.app_scene_hint(), 0., 0., self.pick, window);
             if let Some(w) = &mut self.wipe {
                 w.freeze = true;
                 w.p = 0.;
             }
-            let _ = (vw, vh);
             self.leave_live(false, window);
         }
         if self.was_live {
@@ -325,10 +325,6 @@ impl OnbView {
         self.closing = Some(Instant::now());
         self.fx(|a, _| a.overlays.onboarding.covers = false);
         cx.notify();
-    }
-
-    fn cur_scene(&self, cx: &App) -> &'static str {
-        self.app.upgrade().map(|a| a.read(cx).scene.id).unwrap_or("tako")
     }
 
     /// The mock's `setStep(i, instant)`.
@@ -590,18 +586,28 @@ impl Render for OnbView {
         }
         let t_frame = t0.elapsed();
         if let Some(w) = &mut self.wipe {
-            if w.advance(dt) {
+            if w.advance(dt, self.snap) {
                 let w = self.wipe.take().unwrap();
                 self.trash.push(w.img);
             }
         }
         if STEPS[self.step].fin && !self.live && self.wipe.is_none() && self.closing.is_none() && self.step_at.elapsed().as_secs_f32() > 2.6 {
             self.enter_live(vw * 0.62, vh * 0.42, window);
+            if self.snap {
+                // offscreen: the wipe would have started at 2.6s
+                let late = self.step_at.elapsed().as_secs_f64() - 2.6;
+                if let Some(w) = &mut self.wipe {
+                    w.start -= std::time::Duration::from_secs_f64(late.max(0.));
+                }
+            }
         }
         self.flush(cx);
 
         // ---------------------------------------------------------- layers
         let unit = self.story.s as f32;
+        if self.prof {
+            eprintln!("onb render: live={} wipe={:?} closing={}", self.live, self.wipe.as_ref().map(|w| (w.p, w.freeze)), self.closing.is_some());
+        }
         let fade = match self.closing {
             Some(c) => 1. - bezier(0.6, 0., 0.4, 1., c.elapsed().as_secs_f32() / 0.9),
             None => css_ease(self.opened_at.elapsed().as_secs_f32() / 1.1),
@@ -649,7 +655,7 @@ impl Render for OnbView {
                 let bd = app.update(cx, |a, cx| a.render_backdrop(window, cx).into_any_element());
                 root = root.child(bd);
             }
-        } else {
+        } else if !self.wipe.as_ref().is_some_and(|w| w.freeze) {
             for i in 0..self.passes.len() {
                 let ps = self.passes.clone();
                 root = root.child(

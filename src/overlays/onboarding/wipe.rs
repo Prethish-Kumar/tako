@@ -31,6 +31,8 @@ pub struct Wipe {
     pub p: f64,
     col: [u8; 3],
     pub freeze: bool,
+    /// wall-clock start (offscreen snapshots derive `p` from it)
+    pub start: std::time::Instant,
 }
 
 impl Wipe {
@@ -53,12 +55,15 @@ impl Wipe {
                 d.push((dx.hypot(dy) / max_d + (ang * 5. + seed).sin() * 0.025 + (ang * 11. - seed).sin() * 0.012) as f32);
             }
         }
-        Wipe { img, iw, ih, cols, rows, d: Rc::new(d), p: 0., col, freeze: false }
+        Wipe { img, iw, ih, cols, rows, d: Rc::new(d), p: 0., col, freeze: false, start: std::time::Instant::now() }
     }
 
     /// Advance; returns true when finished.
-    pub fn advance(&mut self, dt: f64) -> bool {
-        if !self.freeze {
+    pub fn advance(&mut self, dt: f64, wall: bool) -> bool {
+        if self.freeze {
+        } else if wall {
+            self.p = self.start.elapsed().as_secs_f64() / DUR;
+        } else {
             self.p += dt / DUR;
         }
         self.p >= 1.

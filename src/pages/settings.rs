@@ -560,11 +560,8 @@ impl TakoApp {
     }
 
     /// Hook for "Replay intro": opens the onboarding story.
-    // TODO(onboarding): once overlays/onboarding.rs has a proper `open()` (reset to
-    // beat 0, start its timers), call that here instead of flipping the flag.
-    fn replay_intro(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.overlays.onboarding.open = true;
-        cx.notify();
+    fn replay_intro(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_onboarding(window, cx);
     }
 
     fn sec_appearance(&mut self, t: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {

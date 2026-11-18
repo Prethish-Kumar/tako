@@ -216,10 +216,13 @@ impl TakoApp {
             .min_w_0()
             .flex()
             .bg(t.bg)
-            .line_height(relative(1.25))
+            .line_height(relative(1.21))
             .text_size(px(14.))
             .child(body)
-            .with_animation(("tv-in", tab.id), Animation::new(std::time::Duration::from_millis(250)), |d, p| d.opacity(p))
+            // offscreen snapshots draw once, so an entry fade would capture at 0
+            .with_animation(("tv-in", tab.id), Animation::new(std::time::Duration::from_millis(250)), |d, p| {
+                d.opacity(if std::env::var_os("TAKO_SNAP").is_some() { 1. } else { p })
+            })
     }
 
     /// Insert a tool tab after the active one and focus it (the mock's `open()`).

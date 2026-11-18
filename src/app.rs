@@ -99,7 +99,8 @@ impl TakoApp {
         let (k, v) = a.split_once(':').unwrap_or((a, ""));
         match k {
             "send" => {
-                self.chat.input.update(cx, |s, cx| s.set_value(v.to_string(), window, cx));
+                let inp = if self.view == View::Home { self.home_input() } else { self.chat.input.clone() };
+                inp.update(cx, |s, cx| s.set_value(v.to_string(), window, cx));
                 self.send(window, cx);
             }
             "fold" => self.fold_project(v, cx),

@@ -58,6 +58,8 @@ pub struct ChatState {
     pub scroll: ScrollHandle,
     scroll_anim: Option<(Tween, f32)>,
     pub input: Entity<TextareaState>,
+    /// Home has its own composer text ("Ask anything, @ to mention…").
+    pub home_input: Entity<TextareaState>,
     /// Tabs of the current worktree (mirrors `sessions[thread]`).
     pub tabs: Vec<Tab>,
     pub active_tab: usize,
@@ -84,7 +86,16 @@ impl ChatState {
             cx.notify();
         })
         .detach();
+        let home_input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 8).placeholder("Ask anything, @ to mention…"));
+        cx.subscribe_in(&home_input, window, |this: &mut TakoApp, _, ev: &InputEvent, window, cx| {
+            if let InputEvent::PressEnter { secondary: false, shift: false } = ev {
+                this.send(window, cx);
+            }
+            cx.notify();
+        })
+        .detach();
         ChatState {
+            home_input,
             items: vec![],
             next_key: 0,
             open_tools: HashSet::new(),
@@ -208,7 +219,7 @@ impl ChatState {
 impl TakoApp {
     /// The composer input used on Home (shared with chat).
     pub fn home_input(&self) -> Entity<TextareaState> {
-        self.chat.input.clone()
+        self.chat.home_input.clone()
     }
 
     pub fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -661,7 +672,8 @@ impl TakoApp {
     pub fn render_composer(&mut self, home: bool, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.t();
         let running = !home && self.chat.running;
-        let ready = !self.chat.input.read(cx).value().trim().is_empty();
+        let input = if home { self.chat.home_input.clone() } else { self.chat.input.clone() };
+        let ready = !input.read(cx).value().trim().is_empty();
         let th = self.thread().clone();
         let proj = self.projects.iter().find(|p| p.id == th.repo).cloned();
         let chip = |id: &'static str| div().id(id).flex().items_center().gap(px(6.)).px(px(7.)).py(px(4.)).rounded(px(7.)).text_color(t.text_2).hover(|s| s.bg(t.surface_hover));
@@ -686,7 +698,7 @@ impl TakoApp {
                                 div()
                                     .min_h(px(44.))
                                     .text_size(px(15.))
-                                    .child(Textarea::new(&self.chat.input).appearance(false).bordered(false).text_size(px(15.)).p_0()),
+                                    .child(Textarea::new(&input).appearance(false).bordered(false).text_size(px(15.)).p_0()),
                             )
                             .child(
                                 div()

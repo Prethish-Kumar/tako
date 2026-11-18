@@ -396,11 +396,30 @@ fn paint_deep_sea(window: &mut Window, b: Bounds<Pixels>, w: f32, h: f32, t: f32
         let y = (h - 10. - (xf * 0.05).sin() * 3. - (xf * 0.13).sin() * 1.5).floor();
         rect(window, xf, y, 1., h - y, sand);
     }
-    // TODO(octo): replace this placeholder with the shared renderer once
-    // src/scene/octo.rs lands, i.e. the mock's
-    //   TakoOcto.draw(g, { x: ox, y: oy, t: t * .6, lid: 1, pose: "float", ripple: .2 + .2 * sin(t * .8) })
-    // → crate::scene::octo::draw_octo(window, origin, S, ox, oy, OctoPose { t: t * 0.6, lid: 1., float, ripple, .. })
-    paint_octo_placeholder(window, &rect, ox, oy, t * 0.6);
+    // The shared octopus renderer, asleep and floating (mock: TakoOcto.draw with lid 1, float).
+    {
+        struct Direct<'a, 'b> {
+            window: &'a mut Window,
+            rect: &'b dyn Fn(&mut Window, f32, f32, f32, f32, Hsla),
+        }
+        impl crate::scene::px::PixelTarget for Direct<'_, '_> {
+            fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, c: [u8; 3], a: f32) {
+                let col: Hsla = Rgba { r: c[0] as f32 / 255., g: c[1] as f32 / 255., b: c[2] as f32 / 255., a }.into();
+                (self.rect)(self.window, x as f32, y as f32, w as f32, h as f32, col);
+            }
+        }
+        let tt = t as f64;
+        let o = crate::scene::octo::Octo {
+            x: ox as f64,
+            y: oy as f64,
+            t: tt * 0.6,
+            lid: 1.,
+            pose: crate::scene::octo::Pose::Float,
+            ripple: 0.2 + 0.2 * (tt * 0.8).sin(),
+            ..Default::default()
+        };
+        crate::scene::octo::draw_octo(&mut Direct { window, rect: &rect }, &o);
+    }
     // Zz bubbles
     for bb in bubbles {
         let a = (1. - bb.a / 4.).max(0.);

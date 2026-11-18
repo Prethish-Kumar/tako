@@ -170,8 +170,12 @@ pub fn act(app: &mut TakoApp, k: &str, v: &str, window: &mut Window, cx: &mut Co
                 .spawn(cx, async move |cx| loop {
                     cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
                     if cx.update(|window, cx| {
+                        let t0 = Instant::now();
                         window.refresh();
                         let _ = window.draw(cx);
+                        if std::env::var_os("TAKO_SCENE_PROF").is_some() {
+                            eprintln!("scene window draw: {:?}", t0.elapsed());
+                        }
                     })
                     .is_err()
                     {
@@ -282,7 +286,11 @@ impl Backdrop {
         vp.my = self.my;
         let mut scene = (inf.make)();
         let mut bld = Builder::new(s as f32);
+        let t0 = Instant::now();
         scene.build(&mut bld, &vp, self.t);
+        if std::env::var_os("TAKO_SCENE_PROF").is_some() {
+            eprintln!("scene {} build {}x{}: {:?}", inf.id, w, h, t0.elapsed());
+        }
         self.live = Some(Live { info: inf, scene, vp, imgs: bld.made, key });
         // the mock samples the backdrop ~1.85s after a build
         self.extract_at = Some(self.t + 1.85);
@@ -293,7 +301,11 @@ impl Backdrop {
         let Some(l) = &self.live else { return };
         let (w, h) = (l.vp.w as usize, l.vp.h as usize);
         let rgb = px::composite(&self.passes, w, h);
-        if let Some(spec) = extract::extract(&rgb, w, h) {
+        let spec = extract::extract(&rgb, w, h);
+        if std::env::var_os("TAKO_SCENE_PROF").is_some() {
+            eprintln!("scene auto theme: {spec:?}");
+        }
+        if let Some(spec) = spec {
             cx.global_mut::<crate::theme::ThemeState>().set_auto(spec);
             self.app.update(cx, |_, cx| cx.notify()).ok();
         }
@@ -330,9 +342,14 @@ impl Render for Backdrop {
             if !just_built {
                 live.scene.update(&live.vp, t, dt);
             }
+            let t0 = Instant::now();
             let mut f = Frame::new(live.vp.s);
             live.scene.draw(&live.vp, t, &mut f);
             self.passes = Rc::new(f.finish());
+            if std::env::var_os("TAKO_SCENE_PROF").is_some() {
+                let n: usize = self.passes.iter().map(|p| p.ops.len()).sum();
+                eprintln!("scene frame: {:?}, {} passes, {} ops", t0.elapsed(), self.passes.len(), n);
+            }
         }
         if let Some(f) = &mut self.fade {
             f.a -= dt / 0.9;

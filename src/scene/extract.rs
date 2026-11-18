@@ -2,33 +2,31 @@
 //! (port of `extract()` in the mock's THEME ENGINE).
 use crate::theme::{Spec, hsl2rgb, rgb2hsl};
 
-/// `rgb` is a W×H art-resolution frame (0..1). It is box-filtered down to the mock's
-/// 64×40 probe first.
+/// `rgb` is a W×H art-resolution frame (0..1), resampled to the mock's 64×40 probe first.
 pub fn extract(rgb: &[[f32; 3]], w: usize, h: usize) -> Option<Spec> {
     const PW: usize = 64;
     const PH: usize = 40;
     if w == 0 || h == 0 {
         return None;
     }
+    // Like the browser's (low-quality, bilinear) drawImage downscale: sample each probe
+    // cell's centre, so bright dither pixels survive instead of being box-averaged away.
     let mut probe = [[0f32; 3]; PW * PH];
+    let at = |x: usize, y: usize| rgb[y.min(h - 1) * w + x.min(w - 1)];
     for py in 0..PH {
-        let (y0, y1) = (py * h / PH, ((py + 1) * h / PH).max(py * h / PH + 1).min(h));
+        let sy = ((py as f32 + 0.5) * h as f32 / PH as f32 - 0.5).max(0.);
+        let (y0, fy) = (sy.floor() as usize, sy.fract());
         for px in 0..PW {
-            let (x0, x1) = (px * w / PW, ((px + 1) * w / PW).max(px * w / PW + 1).min(w));
-            let mut s = [0f32; 3];
-            let mut n = 0.;
-            for y in y0..y1 {
-                for x in x0..x1 {
-                    let c = rgb[y * w + x];
-                    s[0] += c[0];
-                    s[1] += c[1];
-                    s[2] += c[2];
-                    n += 1.;
-                }
+            let sx = ((px as f32 + 0.5) * w as f32 / PW as f32 - 0.5).max(0.);
+            let (x0, fx) = (sx.floor() as usize, sx.fract());
+            let (a, b, c, d) = (at(x0, y0), at(x0 + 1, y0), at(x0, y0 + 1), at(x0 + 1, y0 + 1));
+            let mut o = [0f32; 3];
+            for i in 0..3 {
+                let top = a[i] + (b[i] - a[i]) * fx;
+                let bot = c[i] + (d[i] - c[i]) * fx;
+                o[i] = (top + (bot - top) * fy) * 255.;
             }
-            if n > 0. {
-                probe[py * PW + px] = [s[0] / n * 255., s[1] / n * 255., s[2] / n * 255.];
-            }
+            probe[py * PW + px] = o;
         }
     }
     let mut bins = [[0f64; 4]; 24];

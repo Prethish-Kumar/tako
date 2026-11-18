@@ -258,7 +258,7 @@ impl Backdrop {
     }
 
     /// Build (or rebuild) the wanted scene for the measured size.
-    fn ensure_built(&mut self, sf: f32) -> bool {
+    fn ensure_built(&mut self, sf: f32, light: bool) -> bool {
         let Some(b) = self.bounds.get() else { return false };
         let inf = info(self.want);
         let unit = inf.px as f32;
@@ -266,7 +266,12 @@ impl Backdrop {
         if w < 4 || h < 4 {
             return false;
         }
-        let key = (w, h, (sf * 100.) as u32);
+        // Valley repaints for the light/dark theme (the mock rebuilds on data-theme changes)
+        let lit = inf.id == "valley" && light;
+        let key = (w, h, (sf * 100.) as u32 + if lit { 1_000_000 } else { 0 });
+        if inf.id == "valley" {
+            valley::set_light(light);
+        }
         if let Some(l) = &self.live {
             if l.info.id == inf.id && l.key == key {
                 return false;
@@ -321,7 +326,8 @@ impl Render for Backdrop {
         let dt = self.last.map(|l| (now - l).as_secs_f64()).unwrap_or(0.).min(0.1);
         self.last = Some(now);
         let sf = window.scale_factor();
-        let just_built = self.ensure_built(sf);
+        let light = cx.t().light;
+        let just_built = self.ensure_built(sf, light);
 
         let mut unit = 3f32;
         if let (Some(b), Some(live)) = (self.bounds.get(), self.live.as_mut()) {

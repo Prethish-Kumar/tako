@@ -352,7 +352,7 @@ impl TakoApp {
             .child(
                 tab("pl-installed", s.tab_installed)
                     .child("Installed")
-                    .child(div().ml(px(8.)).text_size(px(11.5)).font_weight(FontWeight::MEDIUM).text_color(t.text_3).child(s.installed.len().to_string()))
+                    .child(div().ml(px(7.)).text_size(px(11.5)).font_weight(FontWeight::MEDIUM).text_color(t.text_3).child(s.installed.len().to_string()))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.pages.plugins.tab_installed = true;
                         cx.notify();

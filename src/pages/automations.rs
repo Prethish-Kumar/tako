@@ -800,7 +800,7 @@ impl TakoApp {
                         cx.notify();
                     }
                 }));
-            wrap = wrap.child(deferred(anchored().anchor(if right { Anchor::TopRight } else { Anchor::TopLeft }).snap_to_window_with_margin(px(8.)).child(panel)).with_priority(1));
+            wrap = wrap.child(div().size_0().relative().child(deferred(anchored().anchor(if right { Anchor::TopRight } else { Anchor::TopLeft }).snap_to_window_with_margin(px(8.)).child(panel)).with_priority(1)));
         }
         wrap.into_any_element()
     }
@@ -1048,7 +1048,7 @@ impl TakoApp {
                         cx.notify();
                     }
                 }));
-                d.child(deferred(anchored().snap_to_window_with_margin(px(8.)).child(panel)).with_priority(1))
+                d.child(div().size_0().relative().child(deferred(anchored().snap_to_window_with_margin(px(8.)).child(panel)).with_priority(1)))
             });
         let triggers = card().children(trig_rows).child(add);
 
@@ -1067,9 +1067,9 @@ impl TakoApp {
             .child(
                 div()
                     .min_h(px(140.))
-                    .px(px(18.))
-                    .pt(px(16.))
-                    .pb(px(8.))
+                    .px(px(8.))
+                    .pt(px(6.))
+                    .pb(px(0.))
                     .child(Textarea::new(&self.pages.auto.ins).appearance(false).bordered(false).p_0().text_size(px(14.)).line_height(relative(1.55))),
             )
             .child(chips);
@@ -1189,7 +1189,7 @@ impl TakoApp {
                     cx.notify();
                 }
             }));
-            wrap = wrap.child(deferred(anchored().anchor(Anchor::TopRight).snap_to_window_with_margin(px(8.)).child(panel)).with_priority(1));
+            wrap = wrap.child(div().size_0().relative().child(deferred(anchored().anchor(Anchor::TopRight).snap_to_window_with_margin(px(8.)).child(panel)).with_priority(1)));
         }
         wrap.into_any_element()
     }

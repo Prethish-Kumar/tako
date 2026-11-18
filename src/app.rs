@@ -42,6 +42,11 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-w", CloseTab, None),
         KeyBinding::new("cmd-shift-]", NextTab, None),
         KeyBinding::new("cmd-shift-[", PrevTab, None),
+        KeyBinding::new("cmd-]", NextTab, None),
+        KeyBinding::new("cmd-[", PrevTab, None),
+        // Text inputs bind ⌘] / ⌘[ to indent/outdent; switching tabs wins, even while typing.
+        KeyBinding::new("cmd-]", NextTab, Some("Input")),
+        KeyBinding::new("cmd-[", PrevTab, Some("Input")),
     ]);
     for i in 1..=9 {
         cx.bind_keys([KeyBinding::new(Box::leak(format!("cmd-{i}").into_boxed_str()), GoTab(i), None)]);
@@ -67,6 +72,8 @@ pub struct TakoApp {
     pub ctx: crate::ctx::CtxState,
     animating_theme: bool,
     labels_seen: Vec<(String, String, u32)>,
+    pub persist_last: Option<crate::persist::Saved>,
+    pub persist_at: Option<std::time::Instant>,
 }
 
 impl TakoApp {
@@ -90,8 +97,13 @@ impl TakoApp {
             threads,
             animating_theme: false,
             labels_seen: vec![],
+            persist_last: None,
+            persist_at: None,
         };
         s.chat.load(&s.threads, s.active);
+        s.restore_state(cx);
+        // Shortcuts dispatch along the focused element's path; start with the app root focused.
+        window.focus(&s.focus, cx);
         if s.pages.settings.startup == "chats" {
             s.view = View::Chats; // Settings → General → Open on startup
         }
@@ -348,6 +360,7 @@ impl Render for TakoApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.tick_theme(window, cx);
         self.sync_labels();
+        self.persist_tick(cx);
         let t = cx.t();
         let view = self.view;
         let empty = self.is_empty_layout();

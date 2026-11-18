@@ -30,6 +30,37 @@ pub fn setup(app: &mut TakoApp, window: &mut Window, cx: &mut Context<TakoApp>) 
                 cx.background_executor().timer(Duration::from_millis(w)).await;
                 continue;
             }
+            // Real input, through GPUI's own dispatch (hit-testing / key contexts included):
+            //   key:cmd-]      click:x,y (logical px)
+            if let Some(k) = a.strip_prefix("key:") {
+                let k: &'static str = Box::leak(k.to_string().into_boxed_str());
+                cx.update(|window, cx| {
+                    window.refresh();
+                    let _ = window.draw(cx);
+                    if let Ok(ks) = Keystroke::parse(k) {
+                        let handled = window.dispatch_keystroke(ks, cx);
+                        eprintln!("key {k} handled={handled}");
+                    }
+                })
+                .ok();
+                continue;
+            }
+            if let Some(xy) = a.strip_prefix("click:") {
+                let mut it = xy.split(',').filter_map(|v| v.trim().parse::<f32>().ok());
+                if let (Some(x), Some(y)) = (it.next(), it.next()) {
+                    cx.update(|window, cx| {
+                        window.refresh();
+                        let _ = window.draw(cx);
+                        let position = point(px(x), px(y));
+                        let m = Modifiers::default();
+                        window.dispatch_event(PlatformInput::MouseMove(MouseMoveEvent { position, pressed_button: None, modifiers: m }), cx);
+                        window.dispatch_event(PlatformInput::MouseDown(MouseDownEvent { button: MouseButton::Left, position, modifiers: m, click_count: 1, first_mouse: false }), cx);
+                        window.dispatch_event(PlatformInput::MouseUp(MouseUpEvent { button: MouseButton::Left, position, modifiers: m, click_count: 1 }), cx);
+                    })
+                    .ok();
+                }
+                continue;
+            }
             let r = this.update_in(cx, |this, window, cx| this.run_action(&a, window, cx));
             if r.is_err() {
                 eprintln!("action {a} failed");

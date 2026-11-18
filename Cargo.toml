@@ -10,6 +10,8 @@ rust-embed = "8"
 image = "0.25"
 # Only to switch on GPUI's offscreen `render_to_image` (dev feature below).
 gpui-pre-platform = { version = "=0.3.12", optional = true, features = ["test-support"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 
 [features]
 default = ["snap"]

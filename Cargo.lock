@@ -6546,6 +6546,8 @@ dependencies = [
  "gpui-pre-platform",
  "image",
  "rust-embed",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

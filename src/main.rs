@@ -7,6 +7,7 @@ mod data;
 mod home;
 mod overlays;
 mod pages;
+mod persist;
 mod pix;
 mod right;
 mod scene;

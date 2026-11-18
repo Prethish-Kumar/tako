@@ -664,7 +664,7 @@ impl TakoApp {
         let mut animating = false;
         for i in self.chat.items.iter_mut() {
             if let Some((tw, j)) = &i.enter {
-                if tw.start.elapsed().as_secs_f32() * 1000. > 300. + 40. * *j as f32 + 400. {
+                if tw.ms() > 300. + 40. * *j as f32 + 400. {
                     i.enter = None;
                 } else {
                     animating = true;
@@ -726,7 +726,7 @@ impl TakoApp {
                 let natural = it.h.clone();
                 let inner = div().relative().flex_none().pt(px(gt)).pb(px(gb)).child(el).child(measurer(natural.clone()));
                 if let Some((tw, j)) = &it.enter {
-                    let ms = tw.start.elapsed().as_secs_f32() * 1000.;
+                    let ms = tw.ms();
                     let hp = ease_snappy(((ms - 40. * *j as f32) / 300.).clamp(0., 1.));
                     let op = ease_snappy(((ms - 120. - 60. * *j as f32) / 320.).clamp(0., 1.));
                     let h = natural.get();

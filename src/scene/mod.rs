@@ -339,7 +339,8 @@ impl Render for Backdrop {
             } else {
                 (0., 0.)
             };
-            if !just_built {
+            // Reduce motion: the mock draws one still frame and stops animating.
+            if !just_built && !crate::ui::reduced_motion() {
                 self.t += dt;
             }
             let t = self.t;
@@ -437,7 +438,9 @@ impl Render for Backdrop {
                 .size_full(),
             );
         }
-        window.request_animation_frame();
+        if !crate::ui::reduced_motion() || self.fade.is_some() {
+            window.request_animation_frame();
+        }
         root
     }
 }

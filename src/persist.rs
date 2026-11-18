@@ -33,7 +33,7 @@ fn path() -> PathBuf {
 
 /// Snapshot runs stay deterministic: no reading or writing state.
 fn enabled() -> bool {
-    std::env::var("TAKO_SNAP").is_err() && std::env::var("TAKO_NO_PERSIST").is_err()
+    (std::env::var("TAKO_SNAP").is_err() || std::env::var("TAKO_PERSIST").is_ok()) && std::env::var("TAKO_NO_PERSIST").is_err()
 }
 
 fn leak(s: &str) -> &'static str {

@@ -731,7 +731,7 @@ impl TakoApp {
                 let el = self.wt_row(th, active == th.id && in_chats, cx).into_any_element();
                 match &rows_p {
                     Some((opening, tw)) => {
-                        let ms = tw.start.elapsed().as_secs_f32() * 1000.;
+                        let ms = tw.ms();
                         let (delay, dur) = if *opening { (30. + i as f32 * 22., 260.) } else { ((n - 1 - i) as f32 * 12., 160.) };
                         let p = ((ms - delay) / dur).clamp(0., 1.);
                         let (o, y) = if *opening {

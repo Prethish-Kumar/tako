@@ -103,11 +103,21 @@ impl Tween {
     pub fn delayed(ms: f32, delay_ms: f32) -> Self {
         Tween { start: std::time::Instant::now(), ms, delay_ms }
     }
+    /// Milliseconds since start (effectively "forever" under Reduce motion).
+    pub fn ms(&self) -> f32 {
+        if reduced_motion() {
+            return 1e9;
+        }
+        self.start.elapsed().as_secs_f32() * 1000.
+    }
     pub fn raw(&self) -> f32 {
+        if reduced_motion() {
+            return 1.;
+        }
         ((self.start.elapsed().as_secs_f32() * 1000. - self.delay_ms) / self.ms).clamp(0., 1.)
     }
     pub fn done(&self) -> bool {
-        self.start.elapsed().as_secs_f32() * 1000. >= self.ms + self.delay_ms
+        reduced_motion() || self.start.elapsed().as_secs_f32() * 1000. >= self.ms + self.delay_ms
     }
 }
 
@@ -155,4 +165,27 @@ pub fn rich_par(text: &str, color: Hsla, t: crate::theme::Theme, size: f32, lh: 
         }
     }
     d
+}
+
+/// macOS "Reduce motion" (System Settings → Accessibility → Display), or TAKO_REDUCE_MOTION=1.
+/// The mock honours prefers-reduced-motion: tweens jump to the end and scenes hold still.
+pub fn reduced_motion() -> bool {
+    static R: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *R.get_or_init(|| {
+        if std::env::var("TAKO_REDUCE_MOTION").is_ok() {
+            return true;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("defaults")
+                .args(["read", "com.apple.universalaccess", "reduceMotion"])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "1")
+                .unwrap_or(false)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    })
 }

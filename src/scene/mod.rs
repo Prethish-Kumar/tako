@@ -17,10 +17,13 @@ use std::{cell::Cell, rc::Rc, sync::Arc, time::Instant};
 
 pub mod aurora;
 pub mod extract;
+pub mod glade;
 pub mod neon;
 pub mod octo;
+pub mod peaks;
 pub mod px;
 pub mod tako;
+pub mod valley;
 
 use px::{Builder, Frame, Pass, Vp};
 
@@ -46,14 +49,14 @@ pub struct SceneInfo {
     pub make: fn() -> Box<dyn Scene>,
 }
 
-/// Registry, in pill order. Peaks / Glade / Valley aren't ported yet and fall back to Tako.
+/// Registry, in pill order.
 pub static SCENES: [SceneInfo; 6] = [
     SceneInfo { id: "tako", name: "Tako", cap: "Tako is here. Ready when you are.", swatch: (0x3a86e0, 0x06102e), px: 3., shift: (9., 3.), make: tako::new },
     SceneInfo { id: "aurora", name: "Aurora", cap: "Clear skies. Your agents work through the night.", swatch: (0x3fd8a0, 0xa77cf0), px: 3., shift: (9., 3.), make: aurora::new },
     SceneInfo { id: "neon", name: "Neon Rain", cap: "The city never sleeps. Neither do your agents.", swatch: (0xe0369a, 0x34e0f0), px: 3., shift: (9., 3.), make: neon::new },
-    SceneInfo { id: "peaks", name: "Peaks", cap: "Every lit window is an agent at work.", swatch: (0x6e3483, 0xffe7a8), px: 3., shift: (9., 3.), make: tako::new },
-    SceneInfo { id: "glade", name: "Glade", cap: "Quiet focus. Nothing needs you yet.", swatch: (0xb4e0ea, 0x2f6e34), px: 3., shift: (9., 3.), make: tako::new },
-    SceneInfo { id: "valley", name: "Valley", cap: "The day's work, shipping at sundown.", swatch: (0xc8504a, 0xffc58a), px: 4., shift: (7., 2.), make: tako::new },
+    SceneInfo { id: "peaks", name: "Peaks", cap: "Every lit window is an agent at work.", swatch: (0x6e3483, 0xffe7a8), px: 3., shift: (9., 3.), make: peaks::new },
+    SceneInfo { id: "glade", name: "Glade", cap: "Quiet focus. Nothing needs you yet.", swatch: (0xb4e0ea, 0x2f6e34), px: 3., shift: (9., 3.), make: glade::new },
+    SceneInfo { id: "valley", name: "Valley", cap: "The day's work, shipping at sundown.", swatch: (0xc8504a, 0xffc58a), px: 4., shift: (7., 2.), make: valley::new },
 ];
 
 pub fn info(id: &str) -> &'static SceneInfo {

@@ -111,6 +111,29 @@ impl TakoApp {
             }
             "newtab" => self.open_tab(crate::chat::TabKind::NewTab, "New Tab", cx),
             "nosidebar" => self.sidebar_open = false,
+            "search" => {
+                self.toggle_search(window, cx);
+                if !v.is_empty() {
+                    if let Some(s) = self.sidebar.search.clone() {
+                        s.update(cx, |s, cx| s.set_value(v.to_string(), window, cx));
+                    }
+                }
+            }
+            "group" => self.sidebar.group_by_label = v == "label",
+            "select" => {
+                self.set_sel_mode(true, cx);
+                for id in v.split(',').filter_map(|s| s.parse().ok()) {
+                    self.sidebar.sel.insert(id);
+                }
+            }
+            "pjmenu" => self.sidebar.menu = Some(v.to_string()),
+            "pjpick" => self.sidebar.picker = Some(v.to_string()),
+            "rename" => self.start_rename(v, window, cx),
+            "newproject" => self.open_new_project(window, cx),
+            "archive" => {
+                let ids: Vec<usize> = v.split(',').filter_map(|s| s.parse().ok()).collect();
+                self.archive_threads(ids, "Archived", cx);
+            }
             "noright" => self.right_open = false,
             _ => self.run_ext_action(k, v, window, cx),
         }
@@ -289,6 +312,7 @@ impl Render for TakoApp {
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &NewChat, _, cx| this.go(View::Home, cx)))
+            .on_action(cx.listener(|this, _: &FocusSearch, window, cx| this.toggle_search(window, cx)))
             .on_action(cx.listener(|this, _: &NewTab, _, cx| this.tab_key("t", false, cx)))
             .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.tab_key("w", false, cx)))
             .on_action(cx.listener(|this, _: &NextTab, _, cx| this.tab_key("]", true, cx)))
@@ -315,5 +339,6 @@ impl Render for TakoApp {
             .when(show_right, |d| d.child(self.render_right(window, cx)))
             .child(self.render_titlebar(window, cx))
             .children(self.render_overlays(window, cx))
+            .children(self.render_new_project(window, cx))
     }
 }

@@ -8,7 +8,7 @@ use gpui_kit::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
-#[derive(Serialize, Deserialize, Default, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 #[serde(default)]
 pub struct Saved {
     pub pal: String,
@@ -25,6 +25,9 @@ pub struct Saved {
     pub bools: BTreeMap<String, bool>,
     pub sels: BTreeMap<String, String>,
     pub effort: String,
+    pub automations: Option<Vec<crate::pages::automations::Automation>>,
+    pub auto_next_id: usize,
+    pub plugins: Option<Vec<String>>,
 }
 
 fn path() -> PathBuf {
@@ -71,6 +74,9 @@ impl TakoApp {
             bools: s.bools.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
             sels: s.sels.iter().map(|(k, v)| (k.to_string(), v.clone())).collect(),
             effort: s.effort.into(),
+            automations: Some(self.pages.auto.autos.clone()),
+            auto_next_id: self.pages.auto.next_id,
+            plugins: Some(self.pages.plugins.installed_order.iter().map(|s| s.to_string()).collect()),
         }
     }
 
@@ -92,8 +98,8 @@ impl TakoApp {
         if let Some(sc) = crate::scene::SCENES.iter().find(|s| s.id == sv.scene) {
             self.scene.id = sc.id;
         }
-        self.sidebar_open = sv.sidebar_open || sv == Saved::default();
-        self.right_open = sv.right_open || sv == Saved::default();
+        self.sidebar_open = sv.sidebar_open;
+        self.right_open = sv.right_open;
         self.sidebar.collapsed = sv.collapsed.iter().cloned().collect();
         self.sidebar.group_by_label = sv.group_by_label;
         if !sv.labels.is_empty() {
@@ -147,6 +153,16 @@ impl TakoApp {
         if let Some(v) = pick(crate::ctx::EFFORT, &sv.effort) {
             s.effort = v;
         }
+        if let Some(a) = sv.automations.clone() {
+            self.pages.auto.autos = a;
+            self.pages.auto.next_id = self.pages.auto.next_id.max(sv.auto_next_id);
+        }
+        if let Some(ids) = &sv.plugins {
+            let ids: Vec<&'static str> = ids.iter().filter_map(|i| crate::pages::plugins::plugin_id(i)).collect();
+            self.pages.plugins.installed = ids.iter().copied().collect();
+            self.pages.plugins.installed_order = ids;
+        }
+        self.persist_json = serde_json::to_string_pretty(&self.saved_state(cx)).unwrap_or_default();
         self.persist_last = Some(sv);
     }
 
@@ -160,16 +176,16 @@ impl TakoApp {
         }
         self.persist_at = Some(std::time::Instant::now());
         let now = self.saved_state(cx);
-        if self.persist_last.as_ref() == Some(&now) {
+        let json = serde_json::to_string_pretty(&now).unwrap_or_default();
+        if self.persist_json == json {
             return;
         }
         let p = path();
         if let Some(dir) = p.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Ok(json) = serde_json::to_string_pretty(&now) {
-            let _ = std::fs::write(&p, json);
-        }
+        let _ = std::fs::write(&p, &json);
+        self.persist_json = json;
         self.persist_last = Some(now);
     }
 }

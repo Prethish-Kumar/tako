@@ -129,8 +129,8 @@ pub(crate) fn menu_item(id: impl Into<ElementId>, cx: &App) -> Stateful<Div> {
 
 // ---------------------------------------------------------------- data
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum TrigKind {
+#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) enum TrigKind {
     Schedule,
     Pr,
     Ci,
@@ -160,8 +160,8 @@ impl TrigKind {
     }
 }
 
-#[derive(Clone, Debug)]
-struct Trigger {
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Trigger {
     kind: TrigKind,
     every: Option<String>,
     at: Option<String>,
@@ -212,15 +212,15 @@ impl Trigger {
     }
 }
 
-#[derive(Clone, Debug)]
-struct Run {
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Run {
     ok: bool,
     when: String,
     out: String,
 }
 
-#[derive(Clone, Debug)]
-struct Automation {
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Automation {
     id: String,
     name: String,
     active: bool,
@@ -340,10 +340,10 @@ enum Menu {
 }
 
 pub struct AutoState {
-    autos: Vec<Automation>,
+    pub(crate) autos: Vec<Automation>,
     sel: Option<String>,
     draft: Option<Automation>,
-    next_id: usize,
+    pub(crate) next_id: usize,
     menu: Option<Menu>,
     menu_closed: Option<(Menu, Instant)>,
     adv_open: bool,

@@ -32,6 +32,10 @@ macro_rules! p {
     };
 }
 
+pub(crate) fn plugin_id(id: &str) -> Option<&'static str> {
+    PLUGINS.iter().find(|p| p.id == id).map(|p| p.id)
+}
+
 const PLUGINS: &[Plugin] = &[
     p!("preview", "Deploy Preview", "Northwind Labs", "Deploy", 0x4f8ef7, "DP", 4.9, 48200, true, true, "A live preview URL for every worktree",
        "Spins up an isolated preview environment whenever an agent opens a worktree, and posts the link in the chat and on the PR.", ["1 MCP server", "2 commands", "1 skill"]),
@@ -69,8 +73,8 @@ fn fmt(n: u32) -> String {
 }
 
 pub struct PluginsState {
-    installed: HashSet<&'static str>,
-    installed_order: Vec<&'static str>,
+    pub(crate) installed: HashSet<&'static str>,
+    pub(crate) installed_order: Vec<&'static str>,
     tab_installed: bool,
     cat: &'static str,
     search: Entity<InputState>,

@@ -10,8 +10,10 @@ Almost every gap below comes from one of these:
    cells use normal alpha blending, so they read a bit flatter than the mock's `lighter`.
 2. **No CSS filters or backdrop blur.** Frosted panels are solid; fade-outs and word rises
    are opacity-only (no `blur()`), and there are no `transform: scale()` transitions on divs.
-3. **No gradient-clipped text, letter-spacing or balanced wrapping.** Shimmer text pulses
-   colour instead; uppercase labels have normal tracking.
+3. **No gradient-clipped text, letter-spacing or balanced wrapping in the text engine.**
+   Worked around: the "Thinking" shimmer colours each glyph from the moving band, and the
+   uppercase labels are tracked by laying characters out one by one (`ui::tracked`). Large
+   headings keep default tracking, and `text-wrap: balance` isn't available.
 4. **No rounded clip masks.** Content is clipped to rectangles; rounded scene cards paint
    their corners in the page colour.
 5. **No web view.** The Browser tab redraws the preview page natively.
@@ -21,13 +23,17 @@ Almost every gap below comes from one of these:
    no inline padded spans) — handled in code so spacing matches the mock.
 8. **Native controls are custom.** Selects, time pickers and toggles are drawn menus/knobs.
 
-Not ported from the mock's behaviour: persistence between launches (the mock uses
-localStorage; only the "intro seen" flag is saved, in `~/.config/tako/onboarded`) and
-reduced-motion handling.
+Persistence and reduced motion are ported: state the mock keeps in localStorage (theme,
+scene, sidebar layout, projects, labels, composer context, settings, automations, installed
+plugins) is saved to `~/.config/tako/state.json`, the intro's "seen" flag to
+`~/.config/tako/onboarded`, and macOS *Reduce motion* makes tweens jump to their end and the
+backdrop hold still. Embedding a real web view (e.g. `wry`) was considered for the Browser
+tab, but the mock itself only shows a fixed srcdoc page, which is redrawn natively; a native
+child view would also sit above every GPUI popover.
 
 ## Chat
-- "Thinking" shimmer: GPUI can't clip a moving gradient to text; the label pulses
-  between text-3 and text colour instead.
+- "Thinking" shimmer: GPUI can't clip a moving gradient to text; each glyph is coloured from the moving band instead (it used to pulse
+  between text-3 and text colour).
 - CSS collapses adjacent vertical margins; GPUI doesn't. The feed computes the
   gap between blocks itself (max of the neighbours' margins) to match.
 - Inline `code` can't be a padded, smaller-font span inside one text run (GPUI
@@ -57,7 +63,7 @@ reduced-motion handling.
 - Placeholder "Ask anything, @ to mention…" is owned by chat.rs (shared composer input).
 
 ## Right panel
-- No letter-spacing in GPUI: the uppercase section headers (`.06em`) are set without tracking.
+- Letter-spacing: uppercase section headers (`.06em`) are tracked via `ui::tracked`.
 - Underline offset (`text-underline-offset: 3px`) isn't configurable; origin/main's underline sits tighter.
 - "Discard all" skips the mock's `confirm()` dialog.
 - The 2px badge ring (`box-shadow: 0 0 0 2px var(--bg)`) is a padded bg-coloured wrapper.
@@ -119,7 +125,7 @@ reduced-motion handling.
 - Auto theme: the frame is software-composited at art resolution (no additive glows) and
   bilinearly sampled to the 64×40 probe; Tako yields accent ≈ #2a5a9e (mock ≈ #6593d8,
   same hue) — after accent tuning the resulting theme matches closely.
-- `prefers-reduced-motion` isn't honoured (always animates).
+- Reduced motion: honoured via macOS *Reduce motion* (scenes hold a still frame).
 
 ## Tool tabs (src/tools/)
 - Browser: GPUI has no web view, so the localhost:3000 preview (the mock's
@@ -146,13 +152,13 @@ reduced-motion handling.
   half-hour menu (no free typing of minutes).
 - Labels are a local copy of the mock's `forgeLabels` defaults (incl. Client,
   Maintenance); new labels aren't shared with the sidebar yet (`data::LABELS` is const).
-- Nothing is persisted (the mock uses localStorage); the Advanced chevron rotates
+- Automations persist in `~/.config/tako/state.json`; the Advanced chevron rotates
   without the .2s transition.
 
 ## Plugins
 - `.pl-fcard:hover` lifts by 2px instantly (no transform transition); the dot
   pattern is painted as small rounded quads, not a radial-gradient.
-- Installed plugins aren't persisted between launches.
+- Installed plugins persist between launches (state.json).
 ## Scenes: Peaks / Glade / Valley
 - Valley's light/dark palette: `Scene::build` gets no `cx`, so the Backdrop calls
   `scene::valley::set_light` and keys Valley's build on the theme, rebuilding when it flips
@@ -182,5 +188,5 @@ reduced-motion handling.
   different moment than the live backdrop. Fix: expose the Backdrop's last passes.
 - Scene pills switch the backdrop, which also runs its own 0.9s cross-fade under the
   wipe (the mock's home scene switch does the same).
-- No `localStorage` "seen" flag: the intro only opens when asked (Replay / scripted).
-- Prefers-reduced-motion isn't consulted.
+- The intro opens on first launch (flag in `~/.config/tako/onboarded`) and on Replay.
+- Reduce motion: tweens jump to their end; the story itself still animates.

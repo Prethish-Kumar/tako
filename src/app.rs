@@ -74,6 +74,7 @@ pub struct TakoApp {
     labels_seen: Vec<(String, String, u32)>,
     pub persist_last: Option<crate::persist::Saved>,
     pub persist_at: Option<std::time::Instant>,
+    pub persist_json: String,
 }
 
 impl TakoApp {
@@ -99,6 +100,7 @@ impl TakoApp {
             labels_seen: vec![],
             persist_last: None,
             persist_at: None,
+            persist_json: String::new(),
         };
         s.chat.load(&s.threads, s.active);
         s.restore_state(cx);

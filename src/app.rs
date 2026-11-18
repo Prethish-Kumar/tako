@@ -25,7 +25,11 @@ pub enum View {
     Stats,
 }
 
-actions!(tako, [ToggleSidebar, ToggleRight, NewChat, FocusSearch]);
+actions!(tako, [ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
+
+#[derive(Clone, PartialEq, gpui_kit::Action)]
+#[action(namespace = tako, no_json)]
+pub struct GoTab(pub usize);
 
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
@@ -33,7 +37,14 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-.", ToggleRight, None),
         KeyBinding::new("cmd-n", NewChat, None),
         KeyBinding::new("cmd-k", FocusSearch, None),
+        KeyBinding::new("cmd-t", NewTab, None),
+        KeyBinding::new("cmd-w", CloseTab, None),
+        KeyBinding::new("cmd-shift-]", NextTab, None),
+        KeyBinding::new("cmd-shift-[", PrevTab, None),
     ]);
+    for i in 1..=9 {
+        cx.bind_keys([KeyBinding::new(Box::leak(format!("cmd-{i}").into_boxed_str()), GoTab(i), None)]);
+    }
 }
 
 pub struct TakoApp {
@@ -92,7 +103,13 @@ impl TakoApp {
             "open" => self.open_thread(v.parse().unwrap_or(1), cx),
             "theme" => self.overlays.theme.open = true,
             "profile" => self.overlays.profile.open = true,
-            "tab" => self.chat.active_tab = v.parse().unwrap_or(0),
+            "tab" => {
+                let i: usize = v.parse().unwrap_or(0);
+                if let Some(id) = self.chat.tabs.get(i).map(|t| t.id) {
+                    self.activate_tab(id, cx)
+                }
+            }
+            "newtab" => self.open_tab(crate::chat::TabKind::NewTab, "New Tab", cx),
             "nosidebar" => self.sidebar_open = false,
             "noright" => self.right_open = false,
             _ => self.run_ext_action(k, v, window, cx),
@@ -272,6 +289,11 @@ impl Render for TakoApp {
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &NewChat, _, cx| this.go(View::Home, cx)))
+            .on_action(cx.listener(|this, _: &NewTab, _, cx| this.tab_key("t", false, cx)))
+            .on_action(cx.listener(|this, _: &CloseTab, _, cx| this.tab_key("w", false, cx)))
+            .on_action(cx.listener(|this, _: &NextTab, _, cx| this.tab_key("]", true, cx)))
+            .on_action(cx.listener(|this, _: &PrevTab, _, cx| this.tab_key("[", true, cx)))
+            .on_action(cx.listener(|this, a: &GoTab, _, cx| this.tab_key(&a.0.to_string(), false, cx)))
             .size_full()
             .relative()
             .bg(t.bg)

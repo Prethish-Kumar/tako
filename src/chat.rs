@@ -13,7 +13,7 @@ use gpui_kit::{
     component::input::{InputEvent, Textarea, TextareaState},
     *,
 };
-use std::{cell::Cell, collections::HashSet, rc::Rc, time::Duration};
+use std::{cell::Cell, collections::{HashMap, HashSet}, rc::Rc, time::Duration};
 
 pub struct FeedItem {
     pub key: usize,
@@ -23,9 +23,10 @@ pub struct FeedItem {
     pub h: Rc<Cell<f32>>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TabKind {
     Chat,
+    NewTab,
     Browser,
     Editor,
     Terminal,
@@ -42,6 +43,14 @@ pub struct Tab {
     pub name: String,
 }
 
+/// One worktree's tabs.
+#[derive(Clone)]
+pub struct Session {
+    pub tabs: Vec<Tab>,
+    pub active: usize,
+    pub last_chat: usize,
+}
+
 pub struct ChatState {
     pub items: Vec<FeedItem>,
     next_key: usize,
@@ -49,10 +58,18 @@ pub struct ChatState {
     pub scroll: ScrollHandle,
     scroll_anim: Option<(Tween, f32)>,
     pub input: Entity<TextareaState>,
+    /// Tabs of the current worktree (mirrors `sessions[thread]`).
     pub tabs: Vec<Tab>,
     pub active_tab: usize,
     pub running: bool,
     thread_id: usize,
+    /// Which chat tab the feed shows.
+    chat_tab: usize,
+    sessions: HashMap<usize, Session>,
+    /// Transcripts of chat sessions not on screen, by (thread, tab).
+    stored: HashMap<(usize, usize), Vec<Block>>,
+    next_tab: usize,
+    pub entering_tab: Option<(usize, Tween)>,
     pending_send: bool,
 }
 
@@ -64,15 +81,9 @@ impl ChatState {
                 this.chat.pending_send = true;
                 this.send(window, cx);
             }
+            cx.notify();
         })
         .detach();
-        let tabs = vec![
-            Tab { id: 0, kind: TabKind::Chat, name: "Chat".into() },
-            Tab { id: 1, kind: TabKind::Chat, name: "Review".into() },
-            Tab { id: 2, kind: TabKind::Diff, name: "Changes".into() },
-            Tab { id: 3, kind: TabKind::Browser, name: "localhost:3000".into() },
-            Tab { id: 4, kind: TabKind::Terminal, name: "Terminal".into() },
-        ];
         ChatState {
             items: vec![],
             next_key: 0,
@@ -80,20 +91,69 @@ impl ChatState {
             scroll: ScrollHandle::new(),
             scroll_anim: None,
             input,
-            tabs,
+            tabs: vec![],
             active_tab: 0,
             running: false,
             thread_id: 0,
+            chat_tab: 0,
+            sessions: HashMap::new(),
+            stored: HashMap::new(),
+            next_tab: 100,
+            entering_tab: None,
             pending_send: false,
         }
     }
 
+    fn session_for(&mut self, id: usize) -> Session {
+        self.sessions
+            .entry(id)
+            .or_insert_with(|| {
+                let mut tabs = vec![Tab { id: 0, kind: TabKind::Chat, name: "Chat".into() }];
+                if id == 1 {
+                    tabs.push(Tab { id: 1, kind: TabKind::Chat, name: "Review".into() });
+                    tabs.push(Tab { id: 2, kind: TabKind::Diff, name: "Changes".into() });
+                    tabs.push(Tab { id: 3, kind: TabKind::Browser, name: "localhost:3000".into() });
+                    tabs.push(Tab { id: 4, kind: TabKind::Terminal, name: "Terminal".into() });
+                }
+                Session { tabs, active: 0, last_chat: 0 }
+            })
+            .clone()
+    }
+
+    fn save_session(&mut self) {
+        if self.thread_id == 0 {
+            return;
+        }
+        self.sessions.insert(self.thread_id, Session { tabs: self.tabs.clone(), active: self.active_tab, last_chat: self.chat_tab });
+        let blocks: Vec<Block> = self.items.iter().filter(|i| i.leave.is_none()).map(|i| i.block.clone()).collect();
+        self.stored.insert((self.thread_id, self.chat_tab), blocks);
+    }
+
+    /// Show worktree `id` (its tabs and its last chat session).
     pub fn load(&mut self, threads: &[Thread], id: usize) {
-        let th = threads.iter().find(|t| t.id == id).unwrap_or(&threads[0]);
+        self.save_session();
+        let s = self.session_for(id);
         self.thread_id = id;
+        self.tabs = s.tabs;
+        self.active_tab = s.active;
+        self.chat_tab = s.last_chat;
+        let th = threads.iter().find(|t| t.id == id).unwrap_or(&threads[0]).clone();
+        self.show_chat(&th, self.chat_tab);
+    }
+
+    fn show_chat(&mut self, th: &Thread, tab: usize) {
+        self.chat_tab = tab;
+        let blocks = self.stored.remove(&(th.id, tab)).unwrap_or_else(|| match tab {
+            0 => data::transcript(th),
+            1 if th.id == 1 => vec![
+                Block::User { text: "Review the open diff in this worktree and flag anything risky.".into(), steer: false },
+                Block::Text("Read all three files. The divider change is safe; the CSS collapse drops the hr opacity, which is intentional per the PR. One nit: `showDivider` could live in `groupItems` so tests don't need to render.".into()),
+            ],
+            _ => vec![],
+        });
         self.items.clear();
         self.open_tools.clear();
-        for b in data::transcript(th) {
+        for b in blocks {
             let k = self.key();
             self.items.push(FeedItem { key: k, block: b, enter: None, leave: None, h: Rc::default() });
         }
@@ -105,10 +165,6 @@ impl ChatState {
     fn key(&mut self) -> usize {
         self.next_key += 1;
         self.next_key
-    }
-
-    fn live(&self) -> impl Iterator<Item = &FeedItem> {
-        self.items.iter().filter(|i| i.leave.is_none())
     }
 
     fn near_bottom(&self) -> bool {
@@ -137,19 +193,70 @@ impl ChatState {
             }
         }
     }
+
+    /// Apply an agent step to a session that may not be on screen.
+    fn step_offscreen(&mut self, sess: (usize, usize), block: Block, last: bool) {
+        let v = self.stored.entry(sess).or_default();
+        let pos = v.iter().rposition(|b| *b == Block::Thinking).unwrap_or(v.len());
+        v.insert(pos, block);
+        if last {
+            v.retain(|b| *b != Block::Thinking);
+        }
+    }
 }
 
 impl TakoApp {
+    /// The composer input used on Home (shared with chat).
+    pub fn home_input(&self) -> Entity<TextareaState> {
+        self.chat.input.clone()
+    }
+
     pub fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.chat.input.read(cx).value().trim().to_string();
+        let input = if self.view == crate::app::View::Home { self.home_input() } else { self.chat.input.clone() };
+        let text = input.read(cx).value().trim().to_string();
         if text.is_empty() {
             return;
         }
-        self.chat.input.update(cx, |s, cx| s.set_value("", window, cx));
+        input.update(cx, |s, cx| s.set_value("", window, cx));
+        if self.view == crate::app::View::Home {
+            // A prompt from Home starts a new worktree and moves you to Chats.
+            let nid = self.threads.iter().map(|t| t.id).max().unwrap_or(0) + 1;
+            let slug: String = text
+                .to_lowercase()
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                .collect::<String>()
+                .split('-')
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("-")
+                .chars()
+                .take(24)
+                .collect();
+            let repo = "tako".to_string();
+            self.threads.insert(
+                0,
+                Thread {
+                    id: nid,
+                    title: text.chars().take(40).collect(),
+                    repo: repo.clone(),
+                    pr: 2150 + nid as u32,
+                    pr_state: data::PrState::Draft,
+                    branch: format!("{repo}/{}", if slug.is_empty() { "task".into() } else { slug }),
+                    running: false,
+                    unread: false,
+                    ago_min: 0,
+                },
+            );
+            self.chat.stored.insert((nid, 0), vec![]);
+            self.active = nid;
+            self.view = crate::app::View::Chats;
+            let threads = self.threads.clone();
+            self.chat.load(&threads, nid);
+        }
         let c = &mut self.chat;
-        // a stale Thinking (stopped run) folds away
         c.remove_thinking();
-        let near = c.near_bottom();
+        let near = c.near_bottom() || c.items.is_empty();
         let k1 = c.key();
         let k2 = c.key();
         c.items.push(FeedItem { key: k1, block: Block::User { text, steer: false }, enter: Some((Tween::new(300.), 0)), leave: None, h: Rc::default() });
@@ -158,9 +265,11 @@ impl TakoApp {
             c.scroll_anim = Some((Tween::new(520.), -f32::from(c.scroll.offset().y)));
         }
         c.running = true;
+        let sess = (c.thread_id, c.chat_tab);
         let id = self.active;
         if let Some(t) = self.threads.iter_mut().find(|t| t.id == id) {
             t.running = true;
+            t.ago_min = 0;
         }
         let steps = data::agent_steps();
         let n = steps.len();
@@ -168,15 +277,30 @@ impl TakoApp {
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(Duration::from_millis(700 * (i as u64 + 1))).await;
                 this.update(cx, |this, cx| {
-                    if this.active != id || !this.chat.running {
-                        return;
+                    let last = i == n - 1;
+                    let c = &mut this.chat;
+                    let on_screen = (c.thread_id, c.chat_tab) == sess;
+                    if on_screen {
+                        if !c.items.iter().any(|it| it.leave.is_none() && it.block == Block::Thinking) {
+                            return; // stopped
+                        }
+                        c.insert_blocks(vec![s]);
+                        if last {
+                            c.remove_thinking();
+                            c.running = false;
+                        }
+                    } else {
+                        if !c.stored.get(&sess).is_some_and(|v| v.contains(&Block::Thinking)) {
+                            return;
+                        }
+                        c.step_offscreen(sess, s, last);
                     }
-                    this.chat.insert_blocks(vec![s]);
-                    if i == n - 1 {
-                        this.chat.remove_thinking();
-                        this.chat.running = false;
-                        if let Some(t) = this.threads.iter_mut().find(|t| t.id == id) {
+                    if last {
+                        if let Some(t) = this.threads.iter_mut().find(|t| t.id == sess.0) {
                             t.running = false;
+                            if !on_screen {
+                                t.unread = true;
+                            }
                         }
                     }
                     cx.notify();
@@ -199,33 +323,154 @@ impl TakoApp {
         cx.notify();
     }
 
+    pub fn activate_tab(&mut self, id: usize, cx: &mut Context<Self>) {
+        let Some(tab) = self.chat.tabs.iter().find(|t| t.id == id).cloned() else { return };
+        self.chat.active_tab = id;
+        if tab.kind == TabKind::Chat && tab.id != self.chat.chat_tab {
+            self.chat.save_session();
+            let th = self.thread().clone();
+            self.chat.show_chat(&th, id);
+        }
+        cx.notify();
+    }
+
+    /// Open a tab of `kind` after the current one (the ⌘T launcher turns into what you pick).
+    pub fn open_tab(&mut self, kind: TabKind, name: &str, cx: &mut Context<Self>) {
+        if self.view != crate::app::View::Chats {
+            self.view = crate::app::View::Chats;
+        }
+        let c = &mut self.chat;
+        let cur = c.tabs.iter().position(|t| t.id == c.active_tab).unwrap_or(0);
+        if kind != TabKind::NewTab && c.tabs[cur].kind == TabKind::NewTab {
+            c.tabs[cur].kind = kind;
+            c.tabs[cur].name = name.into();
+            let id = c.tabs[cur].id;
+            if kind == TabKind::Chat {
+                c.stored.insert((c.thread_id, id), vec![]);
+            }
+            self.activate_tab(id, cx);
+            return;
+        }
+        c.next_tab += 1;
+        let id = c.next_tab;
+        if kind == TabKind::Chat {
+            c.stored.insert((c.thread_id, id), vec![]);
+        }
+        c.tabs.insert(cur + 1, Tab { id, kind, name: name.into() });
+        c.entering_tab = Some((id, Tween::new(320.)));
+        self.activate_tab(id, cx);
+    }
+
+    pub fn close_tab(&mut self, id: usize, cx: &mut Context<Self>) {
+        let c = &mut self.chat;
+        let Some(i) = c.tabs.iter().position(|t| t.id == id) else { return };
+        if i == 0 {
+            return;
+        }
+        c.tabs.remove(i);
+        c.stored.remove(&(c.thread_id, id));
+        if c.active_tab == id {
+            let next = c.tabs.get(i).or(c.tabs.get(i - 1)).map(|t| t.id).unwrap_or(0);
+            if c.chat_tab == id {
+                c.chat_tab = 0;
+                let th = self.thread().clone();
+                self.chat.show_chat(&th, 0);
+            }
+            self.activate_tab(next, cx);
+        }
+        cx.notify();
+    }
+
+    pub fn tab_key(&mut self, key: &str, shift: bool, cx: &mut Context<Self>) {
+        if key == "t" {
+            self.open_tab(TabKind::NewTab, "New Tab", cx);
+            return;
+        }
+        if self.view != crate::app::View::Chats {
+            return;
+        }
+        let tabs: Vec<usize> = self.chat.tabs.iter().map(|t| t.id).collect();
+        let i = tabs.iter().position(|t| *t == self.chat.active_tab).unwrap_or(0);
+        match key {
+            "w" => self.close_tab(self.chat.active_tab, cx),
+            "]" if shift => self.activate_tab(tabs[(i + 1) % tabs.len()], cx),
+            "[" if shift => self.activate_tab(tabs[(i + tabs.len() - 1) % tabs.len()], cx),
+            d if d.len() == 1 && d.as_bytes()[0].is_ascii_digit() && d != "0" => {
+                let n: usize = d.parse().unwrap();
+                let t = if n == 9 { *tabs.last().unwrap() } else if n <= tabs.len() { tabs[n - 1] } else { return };
+                self.activate_tab(t, cx);
+            }
+            _ => {}
+        }
+    }
+
     pub fn render_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tab = self.chat.tabs.iter().find(|t| t.id == self.chat.active_tab).cloned().unwrap_or(self.chat.tabs[0].clone());
         let body: AnyElement = if tab.kind == TabKind::Chat {
-            div().flex_1().min_h_0().flex().flex_col().child(self.render_feed(window, cx)).child(self.render_composer(false, window, cx)).into_any_element()
+            let empty = self.chat.items.is_empty();
+            let t = cx.t();
+            let branch = self.thread().branch.clone();
+            div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .when(empty, |d| {
+                    d.child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(6.))
+                            .pt(relative(0.18))
+                            .text_color(t.text_3)
+                            .child(icon("spark", 22., t.accent).mb(px(6.)))
+                            .child(div().text_color(t.text).font_weight(FontWeight::MEDIUM).text_size(px(15.)).child(format!("New session in {branch}")))
+                            .child("Same worktree, same files — a fresh agent with its own context."),
+                    )
+                })
+                .when(!empty, |d| d.child(self.render_feed(window, cx)))
+                .child(self.render_composer(false, window, cx))
+                .into_any_element()
         } else {
-            self.render_tool_tab(&tab, window, cx).into_any_element()
+            div().flex_1().min_h_0().flex().bg(cx.t().bg).child(self.render_tool_tab(&tab, window, cx)).into_any_element()
         };
-        div().size_full().flex().flex_col().child(self.render_tabbar(cx)).child(body)
+        div().size_full().flex().flex_col().child(self.render_tabbar(window, cx)).child(body)
     }
 
-    fn render_tabbar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_tabbar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.t();
         let active = self.chat.active_tab;
         let tabs = self.chat.tabs.clone();
+        let live = self.chat.running;
+        let chat_tab = self.chat.chat_tab;
+        let entering = self.chat.entering_tab.clone();
+        if let Some((_, tw)) = &entering {
+            if tw.done() {
+                self.chat.entering_tab = None;
+            } else {
+                window.request_animation_frame();
+            }
+        }
         div()
-            .h(px(45.))
             .flex_none()
             .flex()
             .items_center()
             .gap(px(2.))
+            .pt(px(8.))
+            .pb(px(6.))
             .px(px(12.))
+            .border_b_1()
+            .border_color(t.border)
+            .overflow_hidden()
             .when(!self.sidebar_open, |d| d.pl(px(150.)))
-            .children(tabs.into_iter().map(|tab| {
+            .children(tabs.into_iter().enumerate().map(|(i, tab)| {
                 let on = tab.id == active;
                 let id = tab.id;
                 let ic = match tab.kind {
                     TabKind::Chat => "spark",
+                    TabKind::NewTab => "plus",
                     TabKind::Browser => "globe",
                     TabKind::Editor => "code",
                     TabKind::Terminal => "term",
@@ -234,43 +479,75 @@ impl TakoApp {
                     TabKind::Whiteboard => "pen",
                     TabKind::Emulator => "phone",
                 };
+                let is_live = live && tab.kind == TabKind::Chat && tab.id == chat_tab;
+                let tab_icon: AnyElement = if is_live {
+                    svg()
+                        .path("icons/spark.svg")
+                        .size(px(14.))
+                        .text_color(t.accent)
+                        .with_animation(("tab-live", id), Animation::new(Duration::from_millis(2400)).repeat(), |s, p| s.with_transformation(Transformation::rotate(percentage(p))))
+                        .into_any_element()
+                } else {
+                    icon(ic, 14., if tab.kind == TabKind::Chat { t.accent } else { t.text_3 }).into_any_element()
+                };
+                let enter = entering.as_ref().filter(|(e, _)| *e == id).map(|(_, tw)| ease_snappy(tw.raw()));
                 div()
                     .id(("tab", id))
+                    .group("tab")
                     .h(px(30.))
                     .pl(px(10.))
-                    .pr(px(12.))
+                    .pr(px(if i == 0 { 12. } else { 5. }))
+                    .flex_none()
+                    .max_w(px(210.))
+                    .min_w(px(44.))
                     .rounded(px(8.))
                     .flex()
                     .items_center()
                     .gap(px(7.))
                     .text_size(px(12.5))
-                    .text_color(if on { t.text } else { t.text_2 })
+                    .text_color(if on { t.text } else { t.text_3 })
                     .when(on, |d| d.bg(t.surface_active))
-                    .when(!on, |d| d.hover(|s| s.bg(t.surface_hover)))
-                    .child(icon(ic, 14., if tab.kind == TabKind::Chat { t.accent } else { t.text_3 }))
-                    .child(tab.name.clone())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.chat.active_tab = id;
-                        cx.notify();
-                    }))
+                    .when(!on, |d| d.hover(|s| s.bg(t.surface_hover).text_color(t.text_2)))
+                    .when_some(enter, |d, e| d.opacity(e).relative().top(px(4. * (1. - e))))
+                    .child(tab_icon)
+                    .child(div().min_w_0().truncate().child(tab.name.clone()))
+                    .when(i > 0, |d| {
+                        d.child(
+                            div()
+                                .id(("tab-x", id))
+                                .size(px(18.))
+                                .rounded(px(5.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(!on, |d| d.invisible().group_hover("tab", |s| s.visible()))
+                                .hover(|s| s.bg(t.surface_active))
+                                .child(icon("x", 11., t.text_3))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.close_tab(id, cx);
+                                })),
+                        )
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| this.activate_tab(id, cx)))
             }))
             .child(
                 div()
-                    .id("tab-new")
-                    .h(px(30.))
-                    .px(px(8.))
+                    .id("tab-add")
+                    .size(px(28.))
+                    .ml(px(2.))
                     .rounded(px(8.))
                     .flex()
+                    .flex_none()
                     .items_center()
-                    .gap(px(6.))
-                    .text_size(px(11.5))
-                    .text_color(t.text_3)
+                    .justify_center()
                     .hover(|s| s.bg(t.surface_hover))
                     .child(icon("plus", 14., t.text_3))
-                    .child("⌘T"),
+                    .on_click(cx.listener(|this, _, _, cx| this.open_tab(TabKind::NewTab, "New Tab", cx))),
             )
+            .child(div().flex_none().ml(px(4.)).text_size(px(11.)).text_color(t.text_3).opacity(0.6).child("⌘T"))
             .child(div().flex_1())
-            .child(self.render_tb_right(cx))
+            .child(div().flex_none().pl(px(12.)).child(self.render_tb_right(cx)))
     }
 
     fn render_feed(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -424,6 +701,7 @@ impl TakoApp {
                             .px(px(10.))
                             .py(px(7.))
                             .text_size(px(13.))
+                            .overflow_hidden()
                             .child(chip("c-access").child(icon("lock", 14., t.text_2)).child("Full access"))
                             .child(chip("c-machine").child(icon("laptop", 14., t.text_2)).child("My MacBook"))
                             .child(sep())
@@ -437,7 +715,8 @@ impl TakoApp {
                                     .child(div().font_weight(FontWeight::SEMIBOLD).text_color(t.text).child("Opus 5.5"))
                                     .child(div().text_color(t.text_3).child("High")),
                             )
-                            .child(ctx_ring(t, if home { 0.08 } else { (0.08 + self.chat.items.len() as f32 * 0.06).min(0.9) })),
+                            // the mock's .ctx-ring collapses to 0 width here; keep it out of the strip
+                            .when(false, |d| d.child(ctx_ring(t, 0.1))),
                     ),
             ),
         )

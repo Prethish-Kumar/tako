@@ -39,6 +39,9 @@ pub fn setup(app: &mut TakoApp, window: &mut Window, cx: &mut Context<TakoApp>) 
             cx.background_executor().timer(Duration::from_millis(ms)).await;
             // Hidden windows don't redraw on their own: force a fresh frame, then read it back.
             cx.update(|window, cx| {
+                // two passes: the first lets measured heights (height animations) settle
+                window.refresh();
+                let _ = window.draw(cx);
                 window.refresh();
                 let _ = window.draw(cx);
                 #[cfg(feature = "snap")]

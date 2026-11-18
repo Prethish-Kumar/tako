@@ -2,3 +2,4 @@
 *.png
 !ref/*.png
 !ref/*.jpg
+/.claude/

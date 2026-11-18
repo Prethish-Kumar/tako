@@ -33,7 +33,7 @@ pub struct SignOut {
 pub struct ProfileState {
     pub open: bool,
     /// bumps on every open so the entrance animation replays
-    pub epoch: usize,
+    opened: Option<Instant>,
     was_open: bool,
     pub signed_out: Option<SignOut>,
     _keys: Subscription,
@@ -48,7 +48,7 @@ impl ProfileState {
                 cx.notify();
             }
         });
-        ProfileState { open: false, epoch: 0, was_open: false, signed_out: None, _keys: keys }
+        ProfileState { open: false, opened: None, was_open: false, signed_out: None, _keys: keys }
     }
 }
 
@@ -77,7 +77,7 @@ impl TakoApp {
     pub fn render_profile(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let pf = &mut self.overlays.profile;
         if pf.open && !pf.was_open {
-            pf.epoch += 1;
+            pf.opened = Some(Instant::now());
         }
         pf.was_open = pf.open;
         let pop = self.overlays.profile.open.then(|| self.render_pf_pop(window, cx).into_any_element());
@@ -91,7 +91,6 @@ impl TakoApp {
     fn render_pf_pop(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.t();
         let tt = totals();
-        let vh = f32::from(window.viewport_size().height);
         let mini = |id: &'static str, b: String, small: &'static str| {
             div()
                 .id(id)
@@ -133,15 +132,21 @@ impl TakoApp {
         // .pf-pop: left = avatar.right + 10, bottom = avatar.bottom + 2
         // (avatar: 30px, centred in the 52px rail, 10px above the window bottom)
         let left = 52. / 2. + 15. + 10.;
-        let bottom = 10. - 2.;
-        let _ = vh;
-        let epoch = self.overlays.profile.epoch;
+        let bottom = 10. - 2.;        // entrance: opacity .16s ease, transform .22s cubic-bezier(.2,.8,.2,1)
+        // (offscreen snapshots draw a single frame, so they skip it)
+        let ms = self.overlays.profile.opened.map(|o| o.elapsed().as_secs_f32() * 1000.).unwrap_or(1e9);
+        let p = if snap_mode() { 1. } else { (ms / 220.).min(1.) };
+        if p < 1. {
+            window.request_animation_frame();
+        }
+        let (op, e) = ((p * 220. / 160.).min(1.), ease_snappy(p));
         div()
             .id("pf-pop")
             .occlude()
             .absolute()
-            .left(px(left))
+            .left(px(left - 6. * (1. - e)))
             .bottom(px(bottom))
+            .opacity(op)
             .w(px(286.))
             .p(px(8.))
             .rounded(px(14.))
@@ -219,12 +224,6 @@ impl TakoApp {
                     cx.notify();
                 }
             }))
-            .with_animation(("pf-in", epoch), Animation::new(Duration::from_millis(220)), move |el, p| {
-                // opacity .16s ease, transform .22s cubic-bezier(.2,.8,.2,1)
-                let o = (p * 220. / 160.).min(1.);
-                let e = ease_snappy(p);
-                el.opacity(o).left(px(left - 6. * (1. - e)))
-            })
     }
 
     fn render_signed_out(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -240,7 +239,8 @@ impl TakoApp {
         // sleeping Tako's mantle centre (art px)
         let (ox, oy) = (w / 2., h * 0.5 - 52. + (t * 1.1).sin() * 2.);
         // Zz bubbles: the mock steps at 60 fps; step by elapsed frames
-        let frames = now.duration_since(so.last).as_secs_f32() * 60.;
+        // (capped: the mock pauses while hidden instead of jumping)
+        let frames = (now.duration_since(so.last).as_secs_f32() * 60.).min(4.);
         so.last = now;
         let mut rnd = || {
             so.seed ^= so.seed << 13;
@@ -332,6 +332,10 @@ impl TakoApp {
                 .into_any_element(),
         )
     }
+}
+
+fn snap_mode() -> bool {
+    std::env::var_os("TAKO_SNAP").is_some()
 }
 
 fn alpha(c: Hsla, a: f32) -> Hsla {

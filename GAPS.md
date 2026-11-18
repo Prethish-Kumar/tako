@@ -2,6 +2,29 @@
 
 Running list of things that could not be matched 1:1, and what was done instead.
 
+## Summary — the recurring GPUI limits
+
+Almost every gap below comes from one of these:
+
+1. **No additive / screen blending.** Glows, god rays, aurora, neon and the wipe's glowing
+   cells use normal alpha blending, so they read a bit flatter than the mock's `lighter`.
+2. **No CSS filters or backdrop blur.** Frosted panels are solid; fade-outs and word rises
+   are opacity-only (no `blur()`), and there are no `transform: scale()` transitions on divs.
+3. **No gradient-clipped text, letter-spacing or balanced wrapping.** Shimmer text pulses
+   colour instead; uppercase labels have normal tracking.
+4. **No rounded clip masks.** Content is clipped to rectangles; rounded scene cards paint
+   their corners in the page colour.
+5. **No web view.** The Browser tab redraws the preview page natively.
+6. **Linear image sampling.** Pixel art is upscaled nearest-neighbour on the CPU first, which
+   costs GPU memory (~30–50 MB per scene at 2×) and a 20–70 ms build on scene switch/resize.
+7. **Layout differences from CSS** (no margin collapsing, different default line-height,
+   no inline padded spans) — handled in code so spacing matches the mock.
+8. **Native controls are custom.** Selects, time pickers and toggles are drawn menus/knobs.
+
+Not ported from the mock's behaviour: persistence between launches (the mock uses
+localStorage; only the "intro seen" flag is saved, in `~/.config/tako/onboarded`) and
+reduced-motion handling.
+
 ## Chat
 - "Thinking" shimmer: GPUI can't clip a moving gradient to text; the label pulses
   between text-3 and text colour instead.

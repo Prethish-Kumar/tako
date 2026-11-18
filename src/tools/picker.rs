@@ -50,7 +50,7 @@ impl TakoApp {
     /// Until chat.rs has a `TabKind::NewTab`, the launcher rides on a tab of any
     /// non-chat kind named "New Tab"; `render_tool_tab` shows the picker for it.
     pub fn open_new_tab(&mut self, cx: &mut Context<Self>) {
-        let id = self.open_tool_tab(TabKind::Browser, "New Tab", cx);
+        let id = self.open_tool_tab(TabKind::NewTab, "New Tab", cx);
         st(|s| {
             s.picker.tab = Some(id);
             s.picker.sel = 0;

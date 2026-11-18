@@ -279,13 +279,12 @@ impl TakoApp {
             .child(div().when(!auto_on, |d| d.opacity(0.)).child(icon("check", 15., t.accent)))
             .on_click(|_, _, cx| set_pal(cx, "auto"));
 
-        let grid = div().flex().flex_wrap().gap(px(6.)).my(px(8.)).children(PRESETS.iter().map(|p| {
+        let grid = div().grid().grid_cols(3).gap(px(6.)).my(px(8.)).children(PRESETS.iter().map(|p| {
             let on = pal == p.id;
             let c = hsl_rgb(p.tint.0, p.tint.1 * 0.55, if mode_light { 0.95 } else { 0.07 });
             let id = p.id;
             div()
                 .id(SharedString::from(format!("tp-sw-{}", p.id)))
-                .w(px((296. - 20. - 2. - 12.) / 3.))
                 .flex()
                 .flex_col()
                 .items_center()

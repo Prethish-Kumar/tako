@@ -356,11 +356,12 @@ impl TakoApp {
             .when(open, |d| {
                 d.child(
                     deferred(
-                        anchored().snap_to_window_with_margin(px(8.)).child(
                             div()
                                 .id(SharedString::from(format!("menu-{key}")))
                                 .occlude()
-                                .mt(px(34.))
+                                .absolute()
+                                .top(px(34.))
+                                .right_0()
                                 .min_w(px(160.))
                                 .p(px(4.))
                                 .rounded(px(9.))
@@ -396,7 +397,6 @@ impl TakoApp {
                                             cx.notify();
                                         }))
                                 })),
-                        ),
                     )
                     .with_priority(1),
                 )

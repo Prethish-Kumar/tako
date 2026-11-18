@@ -90,6 +90,9 @@ impl TakoApp {
             animating_theme: false,
         };
         s.chat.load(&s.threads, s.active);
+        if s.pages.settings.startup == "chats" {
+            s.view = View::Chats; // Settings → General → Open on startup
+        }
         crate::snap::setup(&mut s, window, cx);
         s
     }
@@ -222,10 +225,19 @@ impl TakoApp {
             .flex()
             .items_center()
             .gap(px(2.))
-            .child(b("tb-theme", "palette").on_click(cx.listener(|this, _, _, cx| {
-                this.overlays.theme.open = !this.overlays.theme.open;
-                cx.notify();
-            })))
+            .child(
+                b("tb-theme", "palette")
+                    .relative()
+                    // record the button's bounds so the theme popover anchors under it
+                    .child({
+                        let anchor = self.overlays.theme.anchor.clone();
+                        canvas(move |bounds, _, _| anchor.set(Some(bounds)), |_, _, _, _| {}).absolute().top_0().left_0().size_full()
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.overlays.theme.open = !this.overlays.theme.open;
+                        cx.notify();
+                    })),
+            )
             .child(b("tb-term", "term"))
             .child(b("tb-panel", "panel-r").on_click(cx.listener(|this, _, _, cx| {
                 this.right_open = !this.right_open;
@@ -271,6 +283,13 @@ impl TakoApp {
                     .size(px(30.))
                     .rounded_full()
                     .bg(t.accent)
+                    // the mock's .on ring while the Stats page is open
+                    .when(view == View::Stats, |d| {
+                        d.shadow(vec![
+                            BoxShadow { color: t.bg, offset: point(px(0.), px(0.)), blur_radius: px(0.), spread_radius: px(2.), inset: false },
+                            BoxShadow { color: t.accent.opacity(0.7), offset: point(px(0.), px(0.)), blur_radius: px(0.), spread_radius: px(4.), inset: false },
+                        ])
+                    })
                     .flex()
                     .items_center()
                     .justify_center()

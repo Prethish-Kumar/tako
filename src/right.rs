@@ -560,7 +560,7 @@ impl TakoApp {
                     .min_w_0()
                     .pr(px(4.))
                     .child(div().w(px(14.)).flex().justify_center().text_color(t.text_3).child("→"))
-                    .child(div().font_family(MONO).text_size(px(12.5)).text_color(t.text_2).underline().child("origin/main"))
+                    .child(div().font_family(MONO).text_size(px(12.5)).text_color(t.text_2).underline().text_decoration_color(t.border).child("origin/main"))
                     .child(div().flex_1())
                     .when(ahead > 0, |d| d.child(div().font_family(MONO).text_size(px(12.)).text_color(t.accent).child(format!("↑{ahead}"))))
                     .child(div().font_family(MONO).text_size(px(12.)).text_color(t.text_3).child("↓248")),
@@ -717,7 +717,7 @@ impl TakoApp {
                                 cx.notify();
                             })),
                     )
-                    .children(menu_el),
+                    .children(menu_el.map(|m| deferred(m).with_priority(1))),
             );
 
         // file sections
@@ -1121,7 +1121,7 @@ impl TakoApp {
 /// A chevron, turned -90° when `folded`.
 fn chev(size: f32, color: Hsla, folded: bool) -> Svg {
     let c = icon("chev-d", size, color);
-    if folded { c.with_transformation(Transformation::rotate(percentage(-0.25))) } else { c }
+    if folded { c.with_transformation(Transformation::rotate(percentage(0.75))) } else { c }
 }
 
 /// Scripted actions for this module (TAKO_ACT "key:value"); return true if handled.

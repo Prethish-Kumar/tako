@@ -140,3 +140,24 @@ Running list of things that could not be matched 1:1, and what was done instead.
   aren't mirrored. In the mock they only reach the lake's bottom rows now and then.
 - Glade's sun shafts use `screen` in the mock and are drawn source-over here. The rays are
   near-white, so the difference is small.
+## Onboarding (src/overlays/onboarding*)
+- Fade-in/out is opacity only: the mock's `onbOut` also does `scale(1.04)` +
+  `blur(6px)`, and every word's `onbWord` rise drops its `blur(8px)` (GPUI has no
+  transforms/filters on divs). `text-wrap: balance` and the h1's `letter-spacing:
+  -0.035em` / kicker `.12em` aren't available, so lines are a touch wider. The h1 is
+  fixed at 52px (the clamp(30px, 4.2vw, 52px) max at 1440 wide).
+- `globalCompositeOperation = "lighter"` (rays, every glow sprite, the wipe's glow
+  cells) is source-over: rays get a 1.25× alpha boost, glows use pre-baked radial
+  sprites at 32 alpha levels (GPUI can only apply opacity per element).
+- Story → live dissolve: the story's last recorded frame is composited on the CPU
+  (`px::composite`, ~1ms) and uploaded once; each frame the still-covered 7px blocks
+  are drawn as row-merged cropped sprites of it, glowing cells as quads.
+- Live → story / scene → scene / close-while-live wipes need the *backdrop's* last
+  frame, but `scene::Backdrop` keeps its recorded passes private, so the overlay
+  builds a throwaway copy of the scene at window size and draws one frame of it
+  (~16–30ms hitch on the click). Its animated details (snow, fish…) are from a
+  different moment than the live backdrop. Fix: expose the Backdrop's last passes.
+- Scene pills switch the backdrop, which also runs its own 0.9s cross-fade under the
+  wipe (the mock's home scene switch does the same).
+- No `localStorage` "seen" flag: the intro only opens when asked (Replay / scripted).
+- Prefers-reduced-motion isn't consulted.

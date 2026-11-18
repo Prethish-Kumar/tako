@@ -1,0 +1,23 @@
+[package]
+name = "tako"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+gpui-kit = "0.10"
+rust-embed = "8"
+image = "0.25"
+# Only to switch on GPUI's offscreen `render_to_image` (dev feature below).
+gpui-pre-platform = { version = "=0.3.12", optional = true, features = ["test-support"] }
+
+[features]
+default = ["snap"]
+# Lets the app render its own window to PNG (TAKO_SNAP=path) — used to compare against the HTML mock.
+snap = ["dep:gpui-pre-platform"]
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

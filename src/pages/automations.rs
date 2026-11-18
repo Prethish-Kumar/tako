@@ -1168,7 +1168,7 @@ impl TakoApp {
             .on_click(cx.listener(move |this, _, _, cx| this.au_toggle_menu(mm.clone(), cx)));
         let mut wrap = div().flex().flex_col().flex_none().items_end().child(chip);
         if open {
-            let items: Vec<AnyElement> = (0..48)
+            let items: Vec<AnyElement> = (0..48usize)
                 .map(|k| {
                     let v = format!("{:02}:{:02}", k / 2, (k % 2) * 30);
                     let sel = v == at;

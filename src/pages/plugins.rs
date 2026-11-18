@@ -184,7 +184,8 @@ impl TakoApp {
         let s = &mut self.pages.plugins;
         s.detail = Some(id);
         s.sheet_tween = Some(Tween::new(280.));
-        window.focus(&s.sheet_focus);
+        let f = s.sheet_focus.clone();
+        window.focus(&f, cx);
         cx.notify();
     }
 

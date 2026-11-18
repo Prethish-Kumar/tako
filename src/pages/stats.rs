@@ -607,7 +607,7 @@ impl TakoApp {
                     cx.notify();
                 }))
         };
-        let hd = |s: &'static str| div().px(px(8.)).pt(px(8.)).pb(px(3.)).text_size(px(10.5)).text_color(t.text_3).child(s.to_uppercase());
+        let hd = |s: &'static str| div().px(px(8.)).pt(px(8.)).pb(px(3.)).text_size(px(10.5)).text_color(t.text_3).child(tracked(&s.to_uppercase(), 10.5, 0.06));
         let menu = div()
             .id("ss-menu")
             .occlude()

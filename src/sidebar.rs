@@ -386,7 +386,7 @@ impl TakoApp {
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(t.text_3)
                         .when_some(lab.clone(), |d, l| d.child(div().size(px(7.)).rounded(px(2.)).bg(rgb(l.color))))
-                        .child(lab.map(|l| l.name.to_uppercase()).unwrap_or("NO LABEL".into())),
+                        .child(tracked(&lab.map(|l| l.name.to_uppercase()).unwrap_or("NO LABEL".into()), 11.5, 0.06)),
                 );
                 for p in ps {
                     let list: Vec<Thread> = vis.iter().filter(|t| t.repo == p.id).cloned().collect();

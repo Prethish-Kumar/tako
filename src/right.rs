@@ -803,7 +803,7 @@ impl TakoApp {
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(t.text_2)
                         .child(chev(13., t.text_3, folded))
-                        .child(title.to_uppercase())
+                        .child(tracked(&title.to_uppercase(), 11.5, 0.06))
                         .child(div().font_weight(FontWeight::MEDIUM).text_color(t.text_3).child(list.len().to_string()))
                         .child(div().flex_1())
                         .child(actions)
@@ -966,7 +966,7 @@ impl TakoApp {
             .flex_col()
             .child(
                 self.rp_vh(&t)
-                    .child(th.repo.to_uppercase())
+                    .child(tracked(&th.repo.to_uppercase(), 11.5, 0.06))
                     .child(div().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().font_family(MONO).font_weight(FontWeight::NORMAL).text_color(t.text_3).child(th.branch.clone()))
                     .child(div().flex_1())
                     .child(ib(&t, "ft-collapse", "minus", 24., 14.).tooltip(tip("Collapse folders")).on_click(cx.listener(|this, _, _, cx| {

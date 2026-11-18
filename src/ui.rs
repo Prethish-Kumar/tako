@@ -189,3 +189,14 @@ pub fn reduced_motion() -> bool {
         }
     })
 }
+
+/// CSS `letter-spacing` for short labels: GPUI text has no tracking, so each
+/// character is its own inline item with `em` × font-size after it.
+pub fn tracked(text: &str, size: f32, em: f32) -> Div {
+    let gap = size * em;
+    let n = text.chars().count();
+    div().flex().flex_none().children(text.chars().enumerate().map(move |(i, c)| {
+        let d = div().child(if c == ' ' { "\u{00a0}".to_string() } else { c.to_string() });
+        if i + 1 < n { d.mr(px(gap)) } else { d }
+    }))
+}

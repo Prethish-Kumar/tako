@@ -942,12 +942,25 @@ fn block_view(b: &Block, key: usize, open: bool, t: Theme, cx: &mut Context<Tako
             .text_color(t.text_3)
             .child(icon("clock", 16., t.text_3))
             .child(
-                div().child("Thinking").with_animation(("think", key), Animation::new(Duration::from_millis(1600)).repeat(), move |d, p| {
-                    // shimmer approximation: GPUI can't clip a gradient to text, so pulse the colour instead
-                    let k = (1. - ((p * 2. - 1.).abs())).powf(1.5);
-                    let c = Rgba::from(t.text_3);
-                    let w = Rgba::from(t.text);
-                    d.text_color(Rgba { r: c.r + (w.r - c.r) * k, g: c.g + (w.g - c.g) * k, b: c.b + (w.b - c.b) * k, a: 1. })
+                div().with_animation(("think", key), Animation::new(Duration::from_millis(1600)).repeat(), move |d, p| {
+                    // The mock's shimmer: a text-3 → text → text-3 gradient (200% wide) slides across
+                    // the word. GPUI can't clip a gradient to glyphs, so colour each glyph by where
+                    // it sits under the moving band.
+                    let word = "Thinking";
+                    let n = word.chars().count() as f32;
+                    let (c0, c1) = (Rgba::from(t.text_3), Rgba::from(t.text));
+                    let centre = 1.5 - 2. * p;
+                    let runs: Vec<TextRun> = word
+                        .chars()
+                        .enumerate()
+                        .map(|(i, ch)| {
+                            let x = (i as f32 + 0.5) / n;
+                            let k = (1. - (x - centre).abs()).clamp(0., 1.);
+                            let col = Rgba { r: c0.r + (c1.r - c0.r) * k, g: c0.g + (c1.g - c0.g) * k, b: c0.b + (c1.b - c0.b) * k, a: 1. };
+                            TextRun { len: ch.len_utf8(), font: font(FONT), color: col.into(), background_color: None, underline: None, strikethrough: None }
+                        })
+                        .collect();
+                    d.child(StyledText::new(word).with_runs(runs))
                 }),
             )
             .into_any_element(),

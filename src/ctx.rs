@@ -325,7 +325,7 @@ impl TakoApp {
                 .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).truncate().child(name))
                 .when_some(sub, |d, s| d.child(div().text_size(px(11.5)).text_color(t.text_3).truncate().child(s)))
         };
-        let head = |s: &'static str| div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(t.text_3).pt(px(10.)).px(px(10.)).pb(px(4.)).child(s.to_uppercase());
+        let head = |s: &'static str| div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(t.text_3).pt(px(10.)).px(px(10.)).pb(px(4.)).child(tracked(&s.to_uppercase(), 11., 0.06));
         let check = |on: bool| if on { Some(icon("check", 14., t.accent)) } else { None };
         let foot_btn = |id: &'static str, ic: Option<&'static str>, label: &'static str, msg: &'static str| {
             div()

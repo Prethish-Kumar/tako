@@ -483,7 +483,7 @@ impl TakoApp {
         let vp = window.viewport_size();
         let on = s.installed.contains(p.id);
         let id = p.id;
-        let h4 = |s: &'static str| div().mt(px(10.)).text_size(px(12.)).font_weight(FontWeight::SEMIBOLD).text_color(t.text_3).child(s.to_uppercase());
+        let h4 = |s: &'static str| div().mt(px(10.)).text_size(px(12.)).font_weight(FontWeight::SEMIBOLD).text_color(t.text_3).child(tracked(&s.to_uppercase(), 12., 0.06));
         let stat = |b: String, sm: &'static str, first: bool| {
             div()
                 .flex_1()

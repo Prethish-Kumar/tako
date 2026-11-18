@@ -771,7 +771,7 @@ impl OnbView {
             )
         };
         let kick = rise(
-            div().font_family(PIXEL).text_size(px(11.)).line_height(px(14.)).text_color(rgb(acc)).mb(px(14.)).child(s.k.to_uppercase()),
+            div().font_family(PIXEL).text_size(px(11.)).line_height(px(14.)).text_color(rgb(acc)).mb(px(14.)).child(tracked(&s.k.to_uppercase(), 11., 0.12)),
             since,
             0.05,
             0.7,

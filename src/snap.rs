@@ -30,13 +30,17 @@ pub fn setup(app: &mut TakoApp, window: &mut Window, cx: &mut Context<TakoApp>) 
                 cx.background_executor().timer(Duration::from_millis(w)).await;
                 continue;
             }
-            this.update_in(cx, |this, window, cx| this.run_action(&a, window, cx)).ok();
+            let r = this.update_in(cx, |this, window, cx| this.run_action(&a, window, cx));
+            if r.is_err() {
+                eprintln!("action {a} failed");
+            }
         }
         if let Some(path) = snap {
             cx.background_executor().timer(Duration::from_millis(ms)).await;
-            this.update_in(cx, |_, window, cx| {
+            // Hidden windows don't redraw on their own: force a fresh frame, then read it back.
+            cx.update(|window, cx| {
                 window.refresh();
-                let _ = cx;
+                let _ = window.draw(cx);
                 #[cfg(feature = "snap")]
                 match window.render_to_image() {
                     Ok(img) => {

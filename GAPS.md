@@ -91,7 +91,6 @@ Running list of things that could not be matched 1:1, and what was done instead.
   `t.bg` corner wedges over the backdrop (`SceneState.corner_radius`, default 12px).
 - Hidden/offscreen windows never present frames: `scripts/snap.sh … "scenetest:pump;scene:aurora"`
   shows the backdrop alone and pumps frames by hand so animation/fades progress.
-- Peaks, Glade and Valley aren't ported yet; their pills exist but render Tako.
 - The caption next to the pills is implemented but hidden, as in the mock
   (`.scene-switch .cap { display: none !important }`); `SceneState.show_caption` turns it on.
 - Auto theme: the frame is software-composited at art resolution (no additive glows) and
@@ -132,12 +131,9 @@ Running list of things that could not be matched 1:1, and what was done instead.
   pattern is painted as small rounded quads, not a radial-gradient.
 - Installed plugins aren't persisted between launches.
 ## Scenes: Peaks / Glade / Valley
-- All three are now ported (same seeds/RNG and noise), which replaces the "not ported yet"
-  bullet under Scenes above.
-- Valley's theme: `Scene::build` gets no `cx`, so the light/dark palette comes from
-  `scene::valley::set_light(bool)` (dark by default). Both palettes are ported. The mock
-  rebuilds Valley when `data-theme` changes; here the engine still has to call `set_light` and
-  rebuild (e.g. key the build on `cx.t().light` in `Backdrop`).
+- Valley's light/dark palette: `Scene::build` gets no `cx`, so the Backdrop calls
+  `scene::valley::set_light` and keys Valley's build on the theme, rebuilding when it flips
+  (the mock rebuilds on `data-theme` changes).
 - Valley's lake reflection: the mock copies the canvas back into itself row by row. Here the
   sky and the three ranges each have a mirrored copy, pre-mixed with the water at `waterAlpha`,
   drawn as row strips with the same wobble and per-layer parallax. Clouds, stars and birds

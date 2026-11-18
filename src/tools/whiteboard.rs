@@ -1,7 +1,7 @@
 //! Whiteboard tab: smooth pen / highlighter strokes, sticky notes you can drag
 //! and edit, colour swatches, clear (the mock's `VIEWS.whiteboard`).
 
-use super::{hex, mix, st, tr};
+use super::{hex, mix, snap_mode, st, tr};
 use crate::{app::TakoApp, chat::Tab, theme::{ActiveTheme, Theme}, ui::*};
 use gpui_kit::{
     component::input::{Textarea, TextareaState},
@@ -77,8 +77,13 @@ pub fn wb_act(id: usize, v: &str) {
 }
 
 fn new_note(x: f32, y: f32, text: &str, hue: Hsla, window: &mut Window, cx: &mut Context<TakoApp>) -> Note {
-    let ta = cx.new(|cx| TextareaState::new(window, cx));
-    ta.update(cx, |s, cx| s.set_value(text.to_string(), window, cx));
+    let ta = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 12));
+    ta.update(cx, |s, cx| {
+        s.set_value(text.to_string(), window, cx);
+        // size it now; auto-grow alone settles a frame later
+        let rows: usize = text.lines().map(|l| l.chars().count().div_ceil(20).max(1)).sum();
+        s.set_auto_grow(rows.max(1), 12, cx);
+    });
     Note { x: x - 80., y: y - 20., hue, text: ta, born: Instant::now() }
 }
 
@@ -96,6 +101,11 @@ impl TakoApp {
                 Some(b) => {
                     w.seeded = true;
                     Some((f32::from(b.size.width), f32::from(b.size.height)))
+                }
+                // a snapshot never gets a second frame: guess the board size
+                None if snap_mode() => {
+                    w.seeded = true;
+                    Some((1040., 840.))
                 }
                 None => None,
             }
@@ -253,7 +263,7 @@ impl TakoApp {
             );
 
         let note_els = notes.into_iter().enumerate().map(|(i, (x, y, hue, ta, p))| {
-            let e = ease_snappy(p.min(1.));
+            let e = if snap_mode() { 1. } else { ease_snappy(p.min(1.)) };
             div()
                 .absolute()
                 .left(px(x))

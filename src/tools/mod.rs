@@ -59,6 +59,13 @@ pub fn viewed_files() -> HashSet<String> {
     st(|s| s.viewed.clone())
 }
 
+/// Offscreen snapshots (`TAKO_SNAP`) draw a single frame, so entrance
+/// animations that start on that frame would be captured at 0 — skip them.
+pub(crate) fn snap_mode() -> bool {
+    thread_local!(static S: bool = std::env::var_os("TAKO_SNAP").is_some());
+    S.with(|s| *s)
+}
+
 // ---------- colour + widget helpers shared by the views ----------
 
 /// `color-mix(in srgb, a p, b)` (premultiplied, like the browser does).
@@ -221,7 +228,7 @@ impl TakoApp {
             .child(body)
             // offscreen snapshots draw once, so an entry fade would capture at 0
             .with_animation(("tv-in", tab.id), Animation::new(std::time::Duration::from_millis(250)), |d, p| {
-                d.opacity(if std::env::var_os("TAKO_SNAP").is_some() { 1. } else { p })
+                d.opacity(if snap_mode() { 1. } else { p })
             })
     }
 

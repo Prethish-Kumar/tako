@@ -28,8 +28,9 @@ const LH: f32 = 12.5 * 1.7;
 impl TakoApp {
     fn editor_start_edit(&mut self, id: usize, window: &mut Window, cx: &mut Context<Self>) {
         let text = st(|s| s.editor.get(&id).map(|e| e.text.clone())).unwrap_or_default();
-        let ta = cx.new(|cx| TextareaState::new(window, cx));
+        let ta = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4000));
         ta.update(cx, |s, cx| {
+            s.set_auto_grow(text.lines().count().max(1), 4000, cx);
             s.set_value(text, window, cx);
             s.focus(window, cx);
         });

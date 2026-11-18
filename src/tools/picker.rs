@@ -1,7 +1,7 @@
 //! The ⌘T "New Tab" launcher: a quiet, keyboard-first list (the mock's
 //! `VIEWS.newtab`). Picking a row turns the launcher tab into that tool.
 
-use super::{mix, st};
+use super::{mix, snap_mode, st};
 use crate::{
     app::TakoApp,
     chat::TabKind,
@@ -115,7 +115,7 @@ impl TakoApp {
         let rows = PICKER_ITEMS.iter().enumerate().map(|(i, it)| {
             let on = i == sel;
             // `rise` .45s, staggered 22ms
-            let p = ease_snappy(((shown_ms - 22. * i as f32) / 450.).clamp(0., 1.));
+            let p = if snap_mode() { 1. } else { ease_snappy(((shown_ms - 22. * i as f32) / 450.).clamp(0., 1.)) };
             div()
                 .id(("nt-row", i))
                 .relative()

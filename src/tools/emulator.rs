@@ -1,7 +1,7 @@
 //! Emulator tab: a generic device frame running the session's app
 //! (the mock's `VIEWS.emulator`).
 
-use super::{hex, ib, seg, st, tr};
+use super::{hex, ib, seg, snap_mode, st, tr};
 use crate::{app::TakoApp, chat::Tab, theme::ActiveTheme, ui::*};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -70,7 +70,7 @@ impl TakoApp {
         }
         // `.emu-dev.boot .emu-screen > *` / `.app-card` rise animations
         let rise = |delay: f32, dur: f32| {
-            let p = ease_snappy(((boot_ms - delay) / dur).clamp(0., 1.));
+            let p = if snap_mode() { 1. } else { ease_snappy(((boot_ms - delay) / dur).clamp(0., 1.)) };
             (p, 16. * (1. - p))
         };
 

@@ -44,8 +44,11 @@ impl TakoApp {
             title = th.title,
             pr = th.pr
         );
-        let ta = cx.new(|cx| TextareaState::new(window, cx));
-        ta.update(cx, |s, cx| s.set_value(src.clone(), window, cx));
+        let ta = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4000));
+        ta.update(cx, |s, cx| {
+            s.set_value(src.clone(), window, cx);
+            s.set_auto_grow(src.lines().count().max(1), 4000, cx);
+        });
         cx.subscribe_in(&ta, window, move |_: &mut TakoApp, ta, ev: &InputEvent, _, cx| {
             if let InputEvent::Change = ev {
                 let v = ta.read(cx).value().to_string();
@@ -110,7 +113,7 @@ impl TakoApp {
             .min_w_0()
             .h_full()
             .overflow_y_scroll()
-            .child(div().max_w(px(760.)).mx_auto().px(px(40.)).pt(px(26.)).pb(px(60.)).line_height(relative(1.65)).children(render_md(&text, id, t, cx)));
+            .child(div().w_full().max_w(px(760.)).mx_auto().px(px(40.)).pt(px(26.)).pb(px(60.)).line_height(relative(1.65)).children(render_md(&text, id, t, cx)));
 
         div()
             .flex_1()
@@ -124,10 +127,10 @@ impl TakoApp {
 
 /// Inline markdown: `code`, **bold**, *italic*, [link](url).
 fn inline(s: &str, color: Hsla, t: Theme) -> StyledText {
-    inline_s(s, color, t, false)
+    inline_s(s, color, t, false, FONT)
 }
 
-fn inline_s(s: &str, color: Hsla, t: Theme, italic: bool) -> StyledText {
+fn inline_s(s: &str, color: Hsla, t: Theme, italic: bool, fam: &'static str) -> StyledText {
     #[derive(Clone, Copy, PartialEq)]
     enum K {
         P,
@@ -190,7 +193,7 @@ fn inline_s(s: &str, color: Hsla, t: Theme, italic: bool) -> StyledText {
         .iter()
         .map(|(s, k)| {
             text.push_str(s);
-            let mut f = font(if *k == K::Code { MONO } else { FONT });
+            let mut f = font(if *k == K::Code { MONO } else { fam });
             match k {
                 K::Bold => f.weight = FontWeight::BOLD,
                 K::It => f.style = FontStyle::Italic,
@@ -235,6 +238,7 @@ fn render_md(src: &str, tab: usize, t: Theme, cx: &mut Context<TakoApp>) -> Vec<
                         .font_family(MONO)
                         .text_size(px(12.5))
                         .line_height(relative(1.6))
+                        .overflow_hidden()
                         .children(c.split('\n').map(|l| div().whitespace_nowrap().child(hl(l, &t, t.text))))
                         .into_any_element(),
                 );
@@ -252,7 +256,7 @@ fn render_md(src: &str, tab: usize, t: Theme, cx: &mut Context<TakoApp>) -> Vec<
             ol_n = 0;
         }
         if let Some(h) = line.strip_prefix("# ") {
-            out.push(div().font_family(SERIF).text_size(px(36.)).line_height(relative(1.65)).mb(px(10.)).child(inline(h, t.text, t)).into_any_element());
+            out.push(div().font_family(SERIF).text_size(px(36.)).line_height(relative(1.65)).mb(px(10.)).child(inline_s(h, t.text, t, false, SERIF)).into_any_element());
         } else if let Some(h) = line.strip_prefix("## ").or_else(|| line.strip_prefix("### ")) {
             out.push(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).mt(px(26.)).mb(px(8.)).child(inline(h, t.text, t)).into_any_element());
         } else if let Some(rest) = line.strip_prefix("- [").filter(|r| r.len() > 2 && &r[2..3] == " " && (r.starts_with("x]") || r.starts_with(" ]"))) {
@@ -268,7 +272,7 @@ fn render_md(src: &str, tab: usize, t: Theme, cx: &mut Context<TakoApp>) -> Vec<
                     .text_color(t.text_2)
                     .child(checkbox(on, t).mr(px(6.)).ml(px(3.)))
                     .child(" ")
-                    .child(inline(&rest[3..], t.text_2, t))
+                    .child(div().flex_1().min_w_0().child(inline(&rest[3..], t.text_2, t)))
                     .on_click(cx.listener(move |_, _, window, cx| {
                         // ticking a box in preview edits the source
                         let ta = st(|s| s.md.get(&tab).and_then(|m| m.src.clone()));
@@ -324,7 +328,7 @@ fn render_md(src: &str, tab: usize, t: Theme, cx: &mut Context<TakoApp>) -> Vec<
                     .border_color(t.accent)
                     .italic()
                     .text_color(t.text_2)
-                    .child(inline_s(q, t.text_2, t, true))
+                    .child(inline_s(q, t.text_2, t, true, FONT))
                     .into_any_element(),
             );
         } else if line.trim().is_empty() {

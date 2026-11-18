@@ -299,10 +299,10 @@ fn options(key: &str) -> &'static [&'static str] {
 
 /// App-wide labels (the mock's `window.forgeLabels` defaults).
 #[derive(Clone)]
-struct Lbl {
-    id: String,
-    name: String,
-    c: u32,
+pub(crate) struct Lbl {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) c: u32,
 }
 const LABEL_COLORS: [u32; 8] = [0x7aa7e8, 0x5fc48a, 0xe2b75a, 0xc77dff, 0xec7aa0, 0x4fb3c8, 0xe5675f, 0x9aa3b0];
 
@@ -350,7 +350,7 @@ pub struct AutoState {
     sure_delete: bool,
     running: HashSet<String>,
     toggle_tween: Option<Tween>,
-    labels: Vec<Lbl>,
+    pub(crate) labels: Vec<Lbl>,
     adding_label: bool,
     lb_color: usize,
     filter: Entity<InputState>,

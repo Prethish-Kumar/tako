@@ -66,6 +66,7 @@ pub struct TakoApp {
     pub scene: SceneState,
     pub ctx: crate::ctx::CtxState,
     animating_theme: bool,
+    labels_seen: Vec<(String, String, u32)>,
 }
 
 impl TakoApp {
@@ -88,6 +89,7 @@ impl TakoApp {
             ctx: crate::ctx::CtxState::new(),
             threads,
             animating_theme: false,
+            labels_seen: vec![],
         };
         s.chat.load(&s.threads, s.active);
         if s.pages.settings.startup == "chats" {
@@ -170,6 +172,29 @@ impl TakoApp {
     pub fn go(&mut self, v: View, cx: &mut Context<Self>) {
         self.view = v;
         cx.notify();
+    }
+
+    /// The mock has one label list for the whole app; the sidebar, Settings and
+    /// Automations each keep a copy, so propagate whichever one changed.
+    fn sync_labels(&mut self) {
+        let side: Vec<(String, String, u32)> = self.sidebar.labels.iter().map(|l| (l.id.clone(), l.name.clone(), l.color)).collect();
+        let set: Vec<(String, String, u32)> = self.pages.settings.labels.iter().map(|l| (l.id.clone(), l.name.clone(), l.c)).collect();
+        let aut: Vec<(String, String, u32)> = self.pages.auto.labels.iter().map(|l| (l.id.clone(), l.name.clone(), l.c)).collect();
+        let pick = if self.labels_seen.is_empty() {
+            side.clone() // start from the sidebar's (the mock's) defaults
+        } else if side != self.labels_seen {
+            side.clone()
+        } else if set != self.labels_seen {
+            set.clone()
+        } else if aut != self.labels_seen {
+            aut.clone()
+        } else {
+            return;
+        };
+        self.sidebar.labels = pick.iter().map(|(id, name, c)| crate::sidebar::LabelDef { id: id.clone(), name: name.clone(), color: *c }).collect();
+        self.pages.settings.labels = pick.iter().map(|(id, name, c)| crate::pages::settings::Lbl { id: id.clone(), name: name.clone(), c: *c }).collect();
+        self.pages.auto.labels = pick.iter().map(|(id, name, c)| crate::pages::automations::Lbl { id: id.clone(), name: name.clone(), c: *c }).collect();
+        self.labels_seen = pick;
     }
 
     /// Theme colour transitions + anything else that animates app-wide.
@@ -312,6 +337,7 @@ impl TakoApp {
 impl Render for TakoApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.tick_theme(window, cx);
+        self.sync_labels();
         let t = cx.t();
         let view = self.view;
         let empty = self.is_empty_layout();

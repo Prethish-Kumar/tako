@@ -43,6 +43,39 @@ pub struct Tab {
     pub name: String,
 }
 
+/// A tab being dragged in the strip (also its drag preview).
+#[derive(Clone)]
+pub struct DraggedTab {
+    pub id: usize,
+    pub name: String,
+    pub icon: &'static str,
+    pub bg: Hsla,
+    pub fg: Hsla,
+    pub border: Hsla,
+}
+impl Render for DraggedTab {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .h(px(30.))
+            .pl(px(10.))
+            .pr(px(12.))
+            .rounded(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(7.))
+            .bg(self.bg)
+            .border_1()
+            .border_color(self.border)
+            .shadow_lg()
+            .text_size(px(12.5))
+            .text_color(self.fg)
+            .font_family(FONT)
+            .opacity(0.92)
+            .child(icon(self.icon, 14., self.fg))
+            .child(self.name.clone())
+    }
+}
+
 /// One worktree's tabs.
 #[derive(Clone)]
 pub struct Session {
@@ -372,6 +405,25 @@ impl TakoApp {
         self.activate_tab(id, cx);
     }
 
+    /// Drag-reorder: drop `id` before/after `target` (the first Chat tab stays first).
+    pub fn move_tab(&mut self, id: usize, target: usize, after: bool, cx: &mut Context<Self>) {
+        let c = &mut self.chat;
+        if id == target {
+            return;
+        }
+        let Some(from) = c.tabs.iter().position(|t| t.id == id) else { return };
+        if from == 0 {
+            return;
+        }
+        let tab = c.tabs.remove(from);
+        let mut to = c.tabs.iter().position(|t| t.id == target).unwrap_or(c.tabs.len());
+        if after {
+            to += 1;
+        }
+        c.tabs.insert(to.max(1), tab);
+        cx.notify();
+    }
+
     pub fn close_tab(&mut self, id: usize, cx: &mut Context<Self>) {
         let c = &mut self.chat;
         let Some(i) = c.tabs.iter().position(|t| t.id == id) else { return };
@@ -541,6 +593,16 @@ impl TakoApp {
                         )
                     })
                     .on_click(cx.listener(move |this, _, _, cx| this.activate_tab(id, cx)))
+                    .when(i > 0, |d| {
+                        let dt = DraggedTab { id, name: tab.name.clone(), icon: ic, bg: t.panel_solid, fg: t.text, border: t.border };
+                        d.on_drag(dt, |d, _, _, cx| cx.new(|_| d.clone()))
+                    })
+                    .drag_over::<DraggedTab>(move |s, _, _, _| s.bg(t.surface_hover))
+                    .on_drop(cx.listener(move |this, d: &DraggedTab, window, cx| {
+                        // after the target when dropped on its right half, like the mock
+                        let after = window.mouse_position().x > px(0.) && this.chat.tabs.iter().position(|x| x.id == d.id).unwrap_or(0) < i;
+                        this.move_tab(d.id, id, after, cx);
+                    }))
             }))
             .child(
                 div()

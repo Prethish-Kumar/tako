@@ -105,6 +105,8 @@ pub struct ChatState {
     stored: HashMap<(usize, usize), Vec<Block>>,
     next_tab: usize,
     pub entering_tab: Option<(usize, Tween)>,
+    pub tab_scroll: ScrollHandle,
+    tab_scrolled_to: Option<(usize, usize)>,
     pending_send: bool,
 }
 
@@ -144,6 +146,8 @@ impl ChatState {
             stored: HashMap::new(),
             next_tab: 100,
             entering_tab: None,
+            tab_scroll: ScrollHandle::new(),
+            tab_scrolled_to: None,
             pending_send: false,
         }
     }
@@ -370,6 +374,7 @@ impl TakoApp {
     pub fn activate_tab(&mut self, id: usize, cx: &mut Context<Self>) {
         let Some(tab) = self.chat.tabs.iter().find(|t| t.id == id).cloned() else { return };
         self.chat.active_tab = id;
+
         if tab.kind == TabKind::Chat && tab.id != self.chat.chat_tab {
             self.chat.save_session();
             let th = self.thread().clone();
@@ -509,6 +514,14 @@ impl TakoApp {
         let live = self.chat.running;
         let chat_tab = self.chat.chat_tab;
         let entering = self.chat.entering_tab.clone();
+        // keep the active tab in view whenever it (or the tab count) changes
+        let want = (active, tabs.len());
+        if self.chat.tab_scrolled_to != Some(want) {
+            if let Some(ix) = tabs.iter().position(|t| t.id == active) {
+                self.chat.tab_scroll.scroll_to_item(ix);
+            }
+            self.chat.tab_scrolled_to = Some(want);
+        }
         if let Some((_, tw)) = &entering {
             if tw.done() {
                 self.chat.entering_tab = None;
@@ -526,8 +539,29 @@ impl TakoApp {
             .px(px(12.))
             .border_b_1()
             .border_color(t.border)
-            .overflow_hidden()
             .when(!self.sidebar_open, |d| d.pl(px(150.)))
+            .child(
+                // The tabs scroll sideways when they don't fit (trackpad swipe, or the mouse wheel).
+                div()
+                    .id("tab-strip")
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap(px(2.))
+                    .overflow_x_scroll()
+                    .track_scroll(&self.chat.tab_scroll)
+                    .on_scroll_wheel(cx.listener(|this, ev: &ScrollWheelEvent, _, cx| {
+                        let d = ev.delta.pixel_delta(px(20.));
+                        if d.y.abs() > d.x.abs() {
+                            let h = &this.chat.tab_scroll;
+                            let max = h.max_offset();
+                            let mut o = h.offset();
+                            o.x = (o.x + d.y).clamp(-max.x, px(0.));
+                            h.set_offset(o);
+                            cx.notify();
+                        }
+                    }))
             .children(tabs.into_iter().enumerate().map(|(i, tab)| {
                 let on = tab.id == active;
                 let id = tab.id;
@@ -604,6 +638,7 @@ impl TakoApp {
                         this.move_tab(d.id, id, after, cx);
                     }))
             }))
+            )
             .child(
                 div()
                     .id("tab-add")
@@ -618,8 +653,7 @@ impl TakoApp {
                     .child(icon("plus", 14., t.text_3))
                     .on_click(cx.listener(|this, _, _, cx| this.open_tab(TabKind::NewTab, "New Tab", cx))),
             )
-            .child(div().flex_none().ml(px(4.)).text_size(px(11.)).text_color(t.text_3).opacity(0.6).child("⌘T"))
-            .child(div().flex_1())
+            .child(div().flex_none().ml(px(4.)).mr(px(4.)).text_size(px(11.)).text_color(t.text_3).opacity(0.6).child("⌘T"))
             .child(div().flex_none().pl(px(12.)).child(self.render_tb_right(cx)))
     }
 

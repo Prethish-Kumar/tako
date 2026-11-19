@@ -16,9 +16,12 @@ Almost every gap below comes from one of these:
    Worked around: the "Thinking" shimmer colours each glyph from the moving band, and the
    uppercase labels are tracked by laying characters out one by one (`ui::tracked`). Large
    headings keep default tracking, and `text-wrap: balance` isn't available.
-4. **No rounded clip masks.** Content is clipped to rectangles; rounded scene cards paint
-   their corners in the page colour.
-5. **No web view.** The Browser tab redraws the preview page natively.
+4. **No rounded clip masks.** GPUI clips to rectangles, so the rounded scene card paints its
+   corners in the page colour — visually identical to the mock's `border-radius` clip.
+5. **No web view (by choice).** The Browser tab redraws the mock's fixed preview page natively,
+   which looks the same. A `wry` system web view was prototyped (it builds: GPUI exposes the
+   window handle) but left out for now — it adds binary size and a native view that sits above
+   GPUI popovers.
 6. **Linear image sampling.** Pixel art is upscaled nearest-neighbour on the CPU first, which
    costs GPU memory (~30–50 MB per scene at 2×) and a 20–70 ms build on scene switch/resize.
 7. **Layout differences from CSS** (no margin collapsing, different default line-height,

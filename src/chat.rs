@@ -770,10 +770,6 @@ impl TakoApp {
         let running = !home && self.chat.running;
         let input = if home { self.chat.home_input.clone() } else { self.chat.input.clone() };
         let ready = !input.read(cx).value().trim().is_empty();
-        let th = self.thread().clone();
-        let proj = self.projects.iter().find(|p| p.id == th.repo).cloned();
-        let chip = |id: &'static str| div().id(id).flex().items_center().gap(px(6.)).px(px(7.)).py(px(4.)).rounded(px(7.)).text_color(t.text_2).hover(|s| s.bg(t.surface_hover));
-        let sep = || div().flex().items_center().child(icon("chev-r", 12., t.text_3));
         let send_bg = if running || ready { t.text } else { t.surface_active };
         let send_fg = if running || ready { t.bg } else { t.text_3 };
         div().w_full().flex_none().pb(px(16.)).child(

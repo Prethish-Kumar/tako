@@ -203,7 +203,6 @@ impl TakoApp {
     pub fn render_tool_tab(&mut self, tab: &Tab, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.t();
         let is_picker = st(|s| s.picker.tab == Some(tab.id));
-        // the mock's `tvIn` fade (.25s) is the with_animation below
         #[allow(unreachable_patterns)]
         let body: AnyElement = match tab.kind {
             _ if is_picker => self.render_new_tab_picker(tab.id, window, cx).into_any_element(),
@@ -225,11 +224,9 @@ impl TakoApp {
             .bg(t.bg)
             .line_height(relative(1.21))
             .text_size(px(14.))
+            // No entry fade: the mock's `tvIn` (.25s) replayed on every tab switch and made
+            // switching feel slow, so tool tabs appear instantly.
             .child(body)
-            // offscreen snapshots draw once, so an entry fade would capture at 0
-            .with_animation(("tv-in", tab.id), Animation::new(std::time::Duration::from_millis(250)), |d, p| {
-                d.opacity(if snap_mode() { 1. } else { p })
-            })
     }
 
     /// Insert a tool tab after the active one and focus it (the mock's `open()`).

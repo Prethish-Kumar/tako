@@ -236,6 +236,8 @@ pub struct Backdrop {
     passes: Rc<Vec<Pass>>,
     extract_at: Option<f64>,
     trash: Vec<Arc<RenderImage>>,
+    /// A size change waiting to settle before the scene is rebuilt.
+    pending: Option<((usize, usize, u32), Instant)>,
 }
 
 impl Backdrop {
@@ -254,6 +256,7 @@ impl Backdrop {
             passes: Rc::new(vec![]),
             extract_at: None,
             trash: vec![],
+            pending: None,
         }
     }
 
@@ -274,9 +277,25 @@ impl Backdrop {
         }
         if let Some(l) = &self.live {
             if l.info.id == inf.id && l.key == key {
+                self.pending = None;
                 return false;
             }
+            // Same scene, new size (window resize / fullscreen animation): keep drawing the
+            // current build, stretched to cover, and rebuild once the size has settled —
+            // rebuilding on every frame of the resize is what flickered.
+            if l.info.id == inf.id {
+                match self.pending {
+                    Some((k, since)) if k == key && since.elapsed().as_millis() >= 150 => {}
+                    Some((k, _)) if k == key => return false,
+                    _ => {
+                        self.pending = Some((key, Instant::now()));
+                        return false;
+                    }
+                }
+            }
         }
+        self.pending = None;
+        let scene_changed = self.live.as_ref().map(|l| l.info.id != inf.id).unwrap_or(true);
         if let Some(old) = self.live.take() {
             if old.info.id != inf.id && !self.passes.is_empty() {
                 // snapshot the last frame and fade it out over the new scene (0.9s)
@@ -300,8 +319,11 @@ impl Backdrop {
             eprintln!("scene {} build {}x{}: {:?}", inf.id, w, h, t0.elapsed());
         }
         self.live = Some(Live { info: inf, scene, vp, imgs: bld.made, key });
-        // the mock samples the backdrop ~1.85s after a build
-        self.extract_at = Some(self.t + 1.85);
+        // the mock samples the backdrop ~1.85s after a build; a resize of the same scene
+        // keeps the palette (re-sampling would shift every colour after a resize)
+        if scene_changed {
+            self.extract_at = Some(self.t + 1.85);
+        }
         true
     }
 
@@ -332,6 +354,10 @@ impl Render for Backdrop {
         let mut unit = 3f32;
         if let (Some(b), Some(live)) = (self.bounds.get(), self.live.as_mut()) {
             unit = live.info.px as f32;
+            // while a resize settles, stretch the last build so it still covers the card
+            let (bw, bh) = (live.vp.w as f32 * unit, live.vp.h as f32 * unit);
+            let cover = (f32::from(b.size.width) / bw).max(f32::from(b.size.height) / bh).max(1.);
+            unit *= cover;
             // mouse parallax: target from the pointer over the card, eased + a slow drift
             let m = window.mouse_position();
             let (tx, ty) = if b.contains(&m) {
@@ -438,7 +464,7 @@ impl Render for Backdrop {
                 .size_full(),
             );
         }
-        if !crate::ui::reduced_motion() || self.fade.is_some() {
+        if !crate::ui::reduced_motion() || self.fade.is_some() || self.pending.is_some() {
             window.request_animation_frame();
         }
         root

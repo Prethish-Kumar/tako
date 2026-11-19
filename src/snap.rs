@@ -32,6 +32,18 @@ pub fn setup(app: &mut TakoApp, window: &mut Window, cx: &mut Context<TakoApp>) 
             }
             // Real input, through GPUI's own dispatch (hit-testing / key contexts included):
             //   key:cmd-]      click:x,y (logical px)
+            if let Some(wh) = a.strip_prefix("resize:") {
+                let mut it = wh.split(',').filter_map(|v| v.trim().parse::<f32>().ok());
+                if let (Some(w), Some(h)) = (it.next(), it.next()) {
+                    cx.update(|window, cx| {
+                        window.resize(size(px(w), px(h)));
+                        window.refresh();
+                        let _ = window.draw(cx);
+                    })
+                    .ok();
+                }
+                continue;
+            }
             if a == "draw" {
                 cx.update(|window, cx| {
                     window.refresh();

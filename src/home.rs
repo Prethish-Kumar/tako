@@ -44,6 +44,9 @@ pub struct HomeState {
     wake: bool,
     hover: Option<usize>,
     stats: Option<(String, Rc<Stats>)>,
+    /// Home was reached from another page (not app launch): a quick ~0.3s entrance
+    /// instead of the 1s first-load rise.
+    pub fast: bool,
 }
 impl HomeState {
     pub fn new(_: &mut Window, _: &mut Context<TakoApp>) -> Self {
@@ -53,6 +56,7 @@ impl HomeState {
             wake: false,
             hover: None,
             stats: None,
+            fast: false,
         }
     }
 }
@@ -151,16 +155,17 @@ fn level_color(t: &Theme, l: u32) -> Hsla {
 }
 
 /// The mock's `rise` keyframes (opacity + 16px lift; the blur can't be done).
-fn rise<E: Styled>(el: E, enter: Instant, delay_ms: f32) -> E {
-    let p = ((enter.elapsed().as_secs_f32() * 1000. - delay_ms) / 1000.).clamp(0., 1.);
+fn rise<E: Styled>(el: E, enter: Instant, delay_ms: f32, fast: bool) -> E {
+    let (dur, lift, delay) = if fast { (320., 10., delay_ms * 0.6) } else { (1000., 16., delay_ms) };
+    let p = ((enter.elapsed().as_secs_f32() * 1000. - delay) / dur).clamp(0., 1.);
     let e = ease_snappy(p);
-    el.relative().top(px(16. * (1. - e))).opacity(e)
+    el.relative().top(px(lift * (1. - e))).opacity(e)
 }
 
 impl TakoApp {
     /// 1 → 0 while a Home card rises in (delay in ms), for the blur-clearing halo; None once done.
     pub fn home_rise_halo(&self, delay_ms: f32) -> Option<f32> {
-        if self.view != crate::app::View::Home || crate::ui::reduced_motion() {
+        if self.view != crate::app::View::Home || crate::ui::reduced_motion() || self.home.fast {
             return None;
         }
         let p = ((self.home.enter.elapsed().as_secs_f32() * 1000. - delay_ms) / 1000.).clamp(0., 1.);
@@ -196,6 +201,8 @@ impl TakoApp {
             .detach();
         }
 
+        let fast = self.home.fast;
+        let glide = fast && self.nav.entering_from(crate::app::View::Chats) && self.nav.glide.is_some();
         let composer = self.render_composer(true, window, cx).into_any_element();
         let card = self.render_home_stats(window, cx).into_any_element();
         let backdrop = self.render_backdrop(window, cx).into_any_element();
@@ -208,7 +215,7 @@ impl TakoApp {
             .rounded(px(12.))
             .overflow_hidden()
             .bg(t.bg)
-            .child(div().absolute().top_0().left_0().size_full().child(backdrop))
+            .child(div().absolute().top_0().left_0().size_full().when(fast, |d| d.opacity(self.nav.p(0., 420.))).child(backdrop))
             .child(
                 div()
                     .absolute()
@@ -219,8 +226,9 @@ impl TakoApp {
                     .flex()
                     .flex_col()
                     .justify_center()
-                    .child(rise(div().w_full(), enter, 80.).child(composer))
-                    .child(rise(div().w_full().mt(px(-2.)), enter, 200.).child(div().w_full().max_w(px(760.)).mx_auto().px(px(32.)).child(card))),
+                    // arriving from Chats the composer glides in instead of rising
+                    .child(rise(div().w_full(), if glide { enter.checked_sub(Duration::from_secs(5)).unwrap_or(enter) } else { enter }, 80., fast).child(composer))
+                    .child(rise(div().w_full().mt(px(-2.)), enter, 200., fast).child(div().w_full().max_w(px(760.)).mx_auto().px(px(32.)).child(card))),
             )
             .child(div().absolute().top(px(14.)).right(px(14.)).child(switch))
     }

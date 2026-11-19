@@ -221,7 +221,8 @@ impl TakoApp {
             .min_h_0()
             .min_w_0()
             .flex()
-            .bg(t.bg)
+            // The launcher and the terminal let the chat pane's blurred backdrop show through.
+            .when(!(is_picker || matches!(tab.kind, TabKind::NewTab | TabKind::Terminal)), |d| d.bg(t.bg))
             .line_height(relative(1.21))
             .text_size(px(14.))
             // No entry fade: the mock's `tvIn` (.25s) replayed on every tab switch and made

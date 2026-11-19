@@ -498,11 +498,15 @@ impl TakoApp {
                             .child("Same worktree, same files — a fresh agent with its own context."),
                     )
                 })
-                .when(!empty, |d| d.child(self.render_feed(window, cx)))
+                .when(!empty, |d| {
+                    // coming from Home the conversation fades up behind the gliding composer
+                    let e = if self.nav.entering_from(crate::app::View::Home) { self.nav.p(70., 300.) } else { 1. };
+                    d.child(div().flex_1().min_h_0().flex().flex_col().relative().top(px(14. * (1. - e))).opacity(e).child(self.render_feed(window, cx)))
+                })
                 .child(self.render_composer(false, window, cx))
                 .into_any_element()
         } else {
-            div().flex_1().min_h_0().flex().bg(cx.t().bg).child(self.render_tool_tab(&tab, window, cx)).into_any_element()
+            div().flex_1().min_h_0().flex().child(self.render_tool_tab(&tab, window, cx)).into_any_element()
         };
         div().size_full().flex().flex_col().child(self.render_tabbar(window, cx)).child(body)
     }
@@ -772,8 +776,17 @@ impl TakoApp {
         let ready = !input.read(cx).value().trim().is_empty();
         let send_bg = if running || ready { t.text } else { t.surface_active };
         let send_fg = if running || ready { t.bg } else { t.text_3 };
-        div().w_full().flex_none().pb(px(16.)).child(
-            div().max_w(px(760.)).mx_auto().px(px(32.)).child(
+        // Record where this composer is laid out (unshifted) and, during a page switch,
+        // start it where the other page's composer was.
+        let slot = if home { self.nav.slot_home.clone() } else { self.nav.slot_chat.clone() };
+        let (gx, gy, shown) = self.nav.composer_offset(home);
+        if !shown {
+            window.request_animation_frame(); // not measured yet: hide for one frame
+        }
+        div().w_full().flex_none().pb(px(16.)).relative()
+            .child(canvas(move |b, _, _| slot.set(Some(b)), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
+            .child(
+            div().max_w(px(760.)).mx_auto().px(px(32.)).relative().left(px(gx)).top(px(gy)).when(!shown, |d| d.opacity(0.)).child(
                 div()
                     .rounded(px(14.))
                     .bg(t.composer_foot)

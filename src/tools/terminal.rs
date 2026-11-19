@@ -196,7 +196,8 @@ impl TakoApp {
             let ts = &s.term[&id];
             (ts.lines.clone(), ts.input.clone(), ts.scroll.clone())
         });
-        let (bg, fg) = if t.light { (hex(0x1c1a1d), hex(0xe9e6e2)) } else { (mix(hsla(0., 0., 0., 1.), t.bg, 0.35), t.text) };
+        // Slightly see-through so the chat pane's blurred backdrop (bleed) glows behind the terminal.
+        let (bg, fg) = if t.light { (hex(0x1c1a1d).opacity(0.9), hex(0xe9e6e2)) } else { (mix(hsla(0., 0., 0., 1.), t.bg, 0.35).opacity(0.72), t.text) };
         let color = |c: Tc| match c {
             Tc::Plain => fg,
             Tc::Dim => hex(0x8a847f),

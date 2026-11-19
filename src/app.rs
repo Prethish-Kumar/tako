@@ -60,8 +60,52 @@ pub fn bind_keys(cx: &mut App) {
     }
 }
 
+/// Page-switch motion (the mock's VIEW TRANSITIONS): ~300ms, offsets + opacity only.
+/// Home → Chats: the composer glides from Home's centre to the chat's bottom, the side
+/// panels slide in and the feed fades up. Back to Home: the composer glides back while the
+/// backdrop and stats fade in. Other pages fade up.
+pub struct NavFx {
+    last: View,
+    pub from: View,
+    pub at: Option<std::time::Instant>,
+    /// Where the composer was laid out on Home / in the chat (unshifted), refreshed every frame.
+    pub slot_home: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
+    pub slot_chat: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
+    /// The composer slot the transition started from.
+    pub glide: Option<Bounds<Pixels>>,
+}
+impl NavFx {
+    fn new(v: View) -> Self {
+        NavFx { last: v, from: v, at: None, slot_home: Default::default(), slot_chat: Default::default(), glide: None }
+    }
+    /// Eased 0 → 1 progress of the running switch for one element; 1 when nothing runs.
+    pub fn p(&self, delay_ms: f32, dur_ms: f32) -> f32 {
+        match self.at {
+            None => 1.,
+            Some(at) => ease_snappy(((at.elapsed().as_secs_f32() * 1000. - delay_ms) / dur_ms).clamp(0., 1.)),
+        }
+    }
+    /// A switch from `from` into the current view is running.
+    pub fn entering_from(&self, from: View) -> bool {
+        self.at.is_some() && self.from == from
+    }
+    /// (dx, dy, visible) to add to the composer of the view being entered so it starts where
+    /// the old one was. `home` says which composer is asking.
+    pub fn composer_offset(&self, home: bool) -> (f32, f32, bool) {
+        let (Some(_), Some(g)) = (self.at, self.glide) else { return (0., 0., true) };
+        if home == (self.last != View::Home) {
+            return (0., 0., true);
+        }
+        let Some(cur) = (if home { &self.slot_home } else { &self.slot_chat }).get() else { return (0., 0., false) };
+        let k = 1. - self.p(0., 340.);
+        let cx = |b: Bounds<Pixels>| f32::from(b.origin.x) + f32::from(b.size.width) / 2.;
+        ((cx(g) - cx(cur)) * k, f32::from(g.origin.y - cur.origin.y) * k, true)
+    }
+}
+
 pub struct TakoApp {
     pub view: View,
+    pub nav: NavFx,
     pub sidebar_open: bool,
     pub right_open: bool,
     pub threads: Vec<Thread>,
@@ -90,6 +134,7 @@ impl TakoApp {
         let threads = data::threads();
         let mut s = TakoApp {
             view: View::Home,
+            nav: NavFx::new(View::Home),
             sidebar_open: true,
             right_open: true,
             projects: data::projects(),
@@ -413,6 +458,31 @@ impl Render for TakoApp {
         // While the onboarding covers the window the app behind isn't drawn (the mock
         // hides .app), so the shared backdrop entity is only rendered once.
         let covered = self.onboarding_covers();
+        if view != self.nav.last {
+            let from = self.nav.last;
+            self.nav.last = view;
+            if !covered && !reduced_motion() {
+                self.nav.from = from;
+                self.nav.at = Some(std::time::Instant::now());
+                self.nav.glide = match from {
+                    View::Home => self.nav.slot_home.get(),
+                    View::Chats => self.nav.slot_chat.get(),
+                    _ => None,
+                };
+                self.home.fast = view == View::Home;
+            }
+        }
+        if let Some(at) = self.nav.at {
+            if at.elapsed().as_millis() > 650 {
+                self.nav.at = None;
+            } else {
+                window.request_animation_frame();
+            }
+        }
+        // panels slide in from their side when the chat layout appears
+        let into_chats = view == View::Chats && self.nav.at.is_some() && self.nav.from != View::Chats;
+        let (pl, pr) = if into_chats { (self.nav.p(0., 280.), self.nav.p(40., 280.)) } else { (1., 1.) };
+        let page_p = if matches!(view, View::Automations | View::Plugins | View::Settings | View::Stats) { self.nav.p(0., 260.) } else { 1. };
         let show_sidebar = !covered && !empty && self.sidebar_open;
         let show_right = !covered && !empty && self.right_open;
 
@@ -471,7 +541,7 @@ impl Render for TakoApp {
             .line_height(relative(1.21))
             .flex()
             .when(!covered, |d| d.child(self.render_rail(cx)))
-            .when(show_sidebar, |d| d.child(self.render_sidebar(window, cx)))
+            .when(show_sidebar, |d| d.child(div().h_full().flex_none().relative().left(px(-14. * (1. - pl))).opacity(pl).child(self.render_sidebar(window, cx))))
             .child(
                 div()
                     .flex_1()
@@ -480,9 +550,9 @@ impl Render for TakoApp {
                     .relative()
                     .when(view == View::Home, |d| d.pt(px(44.)).pr(px(12.)).pb(px(12.)))
                     .when(view == View::Chats && !covered, |d| d.children(self.render_bleed(cx)))
-                    .child(main),
+                    .child(div().size_full().relative().top(px(8. * (1. - page_p))).opacity(page_p).child(main)),
             )
-            .when(show_right, |d| d.child(self.render_right(window, cx)))
+            .when(show_right, |d| d.child(div().h_full().flex_none().relative().left(px(14. * (1. - pr))).opacity(pr).child(self.render_right(window, cx))))
             .when(!covered, |d| d.child(self.render_titlebar(window, cx)))
             .children(self.render_overlays(window, cx))
             .children(self.render_new_project(window, cx))

@@ -18,10 +18,9 @@ Almost every gap below comes from one of these:
 2. **No CSS `filter: blur()` or `transform: scale()` on elements — approximated.** The mock's
    flat style disables `backdrop-filter` everywhere, so there are no frosted panels to match.
    The onboarding's word rise imitates `blur(8px)`→0 with faint offset copies that converge;
-   popovers imitate `scale(.98)`→1 by growing their box over the same 160–220ms. Home's
-   `rise` (composer + stats card, 1s) stays opacity + slide: those are live elements that
-   can't be drawn twice for a halo, and a box-shadow halo would outline the full-width
-   wrapper rather than the cards.
+   popovers imitate `scale(.98)`→1 by growing their box over the same 160–220ms; Home's
+   `rise` (composer + stats card) imitates its blur with a soft halo in each card's own colour
+   that clears as the card lands.
 
 3. **No gradient-clipped text, letter-spacing or balanced wrapping in the text engine.**
    Worked around: the "Thinking" shimmer colours each glyph from the moving band, and the

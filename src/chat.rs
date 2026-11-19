@@ -777,6 +777,8 @@ impl TakoApp {
                 div()
                     .rounded(px(14.))
                     .bg(t.composer_foot)
+                    // Home's `rise` blur(8px) → 0, imitated by a halo that clears as the card lands
+                    .when_some(if home { self.home_rise_halo(80.) } else { None }, |d, k| d.shadow(vec![BoxShadow { color: t.composer_card.opacity(0.85 * k), offset: point(px(0.), px(0.)), blur_radius: px(14. * k), spread_radius: px(3. * k), inset: false }]))
                     .overflow_hidden()
                     .child(
                         div()

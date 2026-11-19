@@ -158,6 +158,16 @@ fn rise<E: Styled>(el: E, enter: Instant, delay_ms: f32) -> E {
 }
 
 impl TakoApp {
+    /// 1 → 0 while a Home card rises in (delay in ms), for the blur-clearing halo; None once done.
+    pub fn home_rise_halo(&self, delay_ms: f32) -> Option<f32> {
+        if self.view != crate::app::View::Home || crate::ui::reduced_motion() {
+            return None;
+        }
+        let p = ((self.home.enter.elapsed().as_secs_f32() * 1000. - delay_ms) / 1000.).clamp(0., 1.);
+        let k = 1. - ease_snappy(p);
+        (k > 0.01).then_some(k)
+    }
+
     pub fn render_home(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.t();
         // Element state lives only while it is rendered every frame, so this
@@ -361,6 +371,8 @@ impl TakoApp {
             .pb(px(12.))
             .rounded(px(14.))
             .bg(Hsla { a: t.panel_solid.a * 0.74, ..t.panel_solid })
+            // `rise`'s blur(8px) → 0: a soft halo in the card's colour that clears as it lands
+            .when_some(self.home_rise_halo(200.), |d, k| d.shadow(vec![BoxShadow { color: t.panel_solid.opacity(0.85 * k), offset: point(px(0.), px(0.)), blur_radius: px(14. * k), spread_radius: px(3. * k), inset: false }]))
             .child(
                 div()
                     .flex()

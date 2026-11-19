@@ -11,14 +11,17 @@ Almost every gap below comes from one of these:
    sprite pipeline (One, One) and repurposes the sprite `grayscale` bit as "additive". The
    scenes and onboarding mark the mock's `lighter` draws (`Frame::additive`), so rays, aurora,
    sign glows, spills and glow sprites add light like the mock. Windows/Linux use GPUI's other
-   renderer and fall back to normal blending. The onboarding wipe's glowing cells are quads
+   renderer (`gpui-pre-wgpu`) and fall back to normal blending — the same patch would be a
+   WGSL change there, but it can't be built or checked from this Mac, so it isn't shipped. The onboarding wipe's glowing cells are quads
    (not sprites), so they still blend normally.
 
 2. **No CSS `filter: blur()` or `transform: scale()` on elements — approximated.** The mock's
    flat style disables `backdrop-filter` everywhere, so there are no frosted panels to match.
    The onboarding's word rise imitates `blur(8px)`→0 with faint offset copies that converge;
-   popovers imitate `scale(.98)`→1 by growing their box over the same 160–220ms. Other brief
-   entrance blurs (`rise`) are opacity + slide only.
+   popovers imitate `scale(.98)`→1 by growing their box over the same 160–220ms. Home's
+   `rise` (composer + stats card, 1s) stays opacity + slide: those are live elements that
+   can't be drawn twice for a halo, and a box-shadow halo would outline the full-width
+   wrapper rather than the cards.
 
 3. **No gradient-clipped text, letter-spacing or balanced wrapping in the text engine.**
    Worked around: the "Thinking" shimmer colours each glyph from the moving band, and the

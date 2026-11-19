@@ -517,6 +517,24 @@ fn rise(el: Div, since: f32, delay: f32, dur: f32) -> Div {
     el.relative().top(px(12. * (1. - p))).opacity(p)
 }
 
+/// A word rising in with the mock's `blur(8px)` → 0 approximated: faint copies offset by
+/// the blur radius surround the glyphs and converge as it sharpens.
+fn rise_word(w: String, since: f32, delay: f32, dur: f32) -> Div {
+    let p = ease_snappy((since - delay) / dur);
+    let r = 8. * (1. - p) * 0.6;
+    let mut d = div().relative().top(px(12. * (1. - p))).opacity(p);
+    if r > 0.3 {
+        for (dx, dy) in [(-r, 0.), (r, 0.), (0., -r), (0., r)] {
+            d = d.child(div().absolute().left(px(dx)).top(px(dy)).opacity(0.22).child(w.clone()));
+        }
+        // the sharp glyphs fade in under the halo
+        d = d.child(div().opacity(0.35 + 0.65 * p).child(w))
+    } else {
+        d = d.child(w);
+    }
+    d
+}
+
 impl Render for OnbView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.flush(cx);
@@ -780,7 +798,7 @@ impl OnbView {
         // copy block: kicker, h1, p, each word rising in
         let words = |text: &str, size: f32, lh: f32, delay0: f32, per: f32, gap: f32| {
             div().flex().flex_wrap().text_size(px(size)).line_height(px(size * lh)).gap_x(px(gap)).children(
-                text.split(' ').enumerate().map(|(i, w)| rise(div().child(w.to_string()), since, delay0 + per * i as f32, 0.8)),
+                text.split(' ').enumerate().map(|(i, w)| rise_word(w.to_string(), since, delay0 + per * i as f32, 0.8)),
             )
         };
         let kick = rise(

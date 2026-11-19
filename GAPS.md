@@ -14,10 +14,12 @@ Almost every gap below comes from one of these:
    renderer and fall back to normal blending. The onboarding wipe's glowing cells are quads
    (not sprites), so they still blend normally.
 
-2. **No CSS `filter: blur()` or `transform: scale()` on elements.** The mock runs in its
-   *flat* style, which sets `backdrop-filter: none` on every element, so the mock has no
-   frosted panels to match. What remains is the brief `blur(8px)`→0 on a few entrance
-   animations (word rises, `rise`) and small popover scale-ins; those are opacity/slide only.
+2. **No CSS `filter: blur()` or `transform: scale()` on elements — approximated.** The mock's
+   flat style disables `backdrop-filter` everywhere, so there are no frosted panels to match.
+   The onboarding's word rise imitates `blur(8px)`→0 with faint offset copies that converge;
+   popovers imitate `scale(.98)`→1 by growing their box over the same 160–220ms. Other brief
+   entrance blurs (`rise`) are opacity + slide only.
+
 3. **No gradient-clipped text, letter-spacing or balanced wrapping in the text engine.**
    Worked around: the "Thinking" shimmer colours each glyph from the moving band, and the
    uppercase labels are tracked by laying characters out one by one (`ui::tracked`). Large

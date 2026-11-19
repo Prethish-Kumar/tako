@@ -147,7 +147,8 @@ impl TakoApp {
             .left(px(left - 6. * (1. - e)))
             .bottom(px(bottom))
             .opacity(op)
-            .w(px(286.))
+            // the mock's scale(.98) → 1, approximated by growing the box from its anchor corner
+            .w(px(286. * (0.98 + 0.02 * e)))
             .p(px(8.))
             .rounded(px(14.))
             .bg(alpha(t.panel_solid, 0.94))

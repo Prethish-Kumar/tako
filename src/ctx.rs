@@ -482,7 +482,8 @@ impl TakoApp {
                         .id("ctx-pop")
                         .occlude()
                         .mb(px(8.))
-                        .w(px(320.))
+                        // cpIn's scale(.98) → 1, approximated by growing the box
+                        .w(px(320. * (0.98 + 0.02 * e)))
                         .max_h(px(460.))
                         .overflow_y_scroll()
                         .p(px(6.))

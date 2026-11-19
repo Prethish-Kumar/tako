@@ -328,7 +328,8 @@ impl TakoApp {
             .absolute()
             .top(px(top - 6. * (1. - vis)))
             .right(px(right))
-            .w(px(296.))
+            // the mock's scale(.98) → 1, approximated by growing the box from its top-right anchor
+            .w(px(296. * (0.98 + 0.02 * vis)))
             .p(px(10.))
             .rounded(px(14.))
             .bg(t.panel_solid) // flat style: solid popovers

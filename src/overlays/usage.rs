@@ -506,7 +506,8 @@ impl TakoApp {
             .absolute()
             .left(px(left))
             .bottom(px(bottom))
-            .w(px(340.))
+            // the mock's scale(.98) → 1, approximated by growing the box
+            .w(px(340. * (0.98 + 0.02 * vis)))
             .max_h(px(vh - 16.))
             .overflow_y_scroll()
             .pt(px(14.))

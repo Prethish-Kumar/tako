@@ -160,6 +160,39 @@ impl TakoApp {
         v
     }
 
+    /// Worktree ids in the order the sidebar shows them (search, grouping and folded
+    /// projects respected) — what ⌘↑ / ⌘↓ step through.
+    pub fn worktree_order(&self, cx: &App) -> Vec<usize> {
+        let vis = self.visible_threads(cx);
+        let mut projects: Vec<&data::Project> = self.projects.iter().collect();
+        if self.sidebar.group_by_label {
+            let rank = |p: &data::Project| p.label.and_then(|l| self.sidebar.labels.iter().position(|x| x.id == l)).unwrap_or(usize::MAX);
+            projects.sort_by_key(|p| rank(p));
+        }
+        projects
+            .into_iter()
+            .filter(|p| !self.sidebar.collapsed.contains(p.id))
+            .flat_map(|p| vis.iter().filter(|t| t.repo == p.id).map(|t| t.id).collect::<Vec<_>>())
+            .collect()
+    }
+
+    /// ⌘↓ (`dir` = 1) / ⌘↑ (`dir` = -1): open the next / previous worktree.
+    pub fn step_worktree(&mut self, dir: i32, cx: &mut Context<Self>) {
+        let order = self.worktree_order(cx);
+        if order.is_empty() {
+            return;
+        }
+        let next = if self.view != View::Chats {
+            if dir > 0 { order[0] } else { *order.last().unwrap() }
+        } else {
+            match order.iter().position(|id| *id == self.active) {
+                Some(i) => order[(i as i32 + dir).clamp(0, order.len() as i32 - 1) as usize],
+                None => order[0],
+            }
+        };
+        self.open_thread(next, cx);
+    }
+
     pub fn toggle_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sidebar.search_open = !self.sidebar.search_open;
         if self.sidebar.search.is_none() {

@@ -25,7 +25,7 @@ pub enum View {
     Stats,
 }
 
-actions!(tako, [Dismiss, OpenSettings, ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
+actions!(tako, [NextWorktree, PrevWorktree, Dismiss, OpenSettings, ToggleSidebar, ToggleRight, NewChat, FocusSearch, NewTab, CloseTab, NextTab, PrevTab]);
 
 #[derive(Clone, PartialEq, gpui_kit::Action)]
 #[action(namespace = tako, no_json)]
@@ -47,6 +47,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-[", PrevTab, None),
         // Text inputs bind ⌘] / ⌘[ to indent/outdent; switching tabs wins, even while typing.
         KeyBinding::new("cmd-]", NextTab, Some("Input")),
+        // ⌘↓ / ⌘↑ step through the worktrees in the sidebar (also while typing; inputs
+        // would otherwise use them for start / end of text).
+        KeyBinding::new("cmd-down", NextWorktree, None),
+        KeyBinding::new("cmd-up", PrevWorktree, None),
+        KeyBinding::new("cmd-down", NextWorktree, Some("Input")),
+        KeyBinding::new("cmd-up", PrevWorktree, Some("Input")),
         KeyBinding::new("cmd-[", PrevTab, Some("Input")),
     ]);
     for i in 1..=9 {
@@ -417,6 +423,8 @@ impl Render for TakoApp {
             .on_action(cx.listener(|this, _: &FocusSearch, window, cx| this.toggle_search(window, cx)))
             .on_action(cx.listener(|this, _: &NewTab, _, cx| this.tab_key("t", false, cx)))
             .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.go(View::Settings, cx)))
+            .on_action(cx.listener(|this, _: &NextWorktree, _, cx| this.step_worktree(1, cx)))
+            .on_action(cx.listener(|this, _: &PrevWorktree, _, cx| this.step_worktree(-1, cx)))
             // Escape closes whatever menu / popover / dialog is open (the mock's Escape handlers).
             .on_action(cx.listener(|this, _: &Dismiss, _, cx| {
                 this.ctx.open = None;

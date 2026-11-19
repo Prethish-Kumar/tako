@@ -75,10 +75,17 @@ pub struct NavFx {
     pub slot_chat: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     /// The composer slot the transition started from.
     pub glide: Option<Bounds<Pixels>>,
+    /// True while the outgoing page is being drawn as the fading "ghost" over the new one.
+    pub ghost: bool,
 }
+
+/// Home ⇄ Chats: the outgoing page fades out over the fully laid-out new one (no empty
+/// frames), while the composer glides between its two slots.
+pub const GHOST_MS: f32 = 180.;
+pub const GLIDE_MS: f32 = 260.;
 impl NavFx {
     fn new(v: View) -> Self {
-        NavFx { last: v, from: v, at: None, slot_home: Default::default(), slot_chat: Default::default(), glide: None }
+        NavFx { last: v, from: v, at: None, slot_home: Default::default(), slot_chat: Default::default(), glide: None, ghost: false }
     }
     /// Eased 0 → 1 progress of the running switch for one element; 1 when nothing runs.
     pub fn p(&self, delay_ms: f32, dur_ms: f32) -> f32 {
@@ -91,6 +98,15 @@ impl NavFx {
     pub fn entering_from(&self, from: View) -> bool {
         self.at.is_some() && self.from == from
     }
+    /// The outgoing (ghost) composer's offset: from its own slot towards the new page's slot,
+    /// in step with `composer_offset`.
+    pub fn ghost_composer_offset(&self, home: bool) -> (f32, f32, bool) {
+        let (own, other) = if home { (&self.slot_home, &self.slot_chat) } else { (&self.slot_chat, &self.slot_home) };
+        let (Some(src), Some(dst)) = (own.get(), other.get()) else { return (0., 0., true) };
+        let k = self.p(0., GLIDE_MS);
+        let cx = |b: Bounds<Pixels>| f32::from(b.origin.x) + f32::from(b.size.width) / 2.;
+        ((cx(dst) - cx(src)) * k, f32::from(dst.origin.y - src.origin.y) * k, true)
+    }
     /// (dx, dy, visible) to add to the composer of the view being entered so it starts where
     /// the old one was. `home` says which composer is asking.
     pub fn composer_offset(&self, home: bool) -> (f32, f32, bool) {
@@ -99,7 +115,7 @@ impl NavFx {
             return (0., 0., true);
         }
         let Some(cur) = (if home { &self.slot_home } else { &self.slot_chat }).get() else { return (0., 0., false) };
-        let k = 1. - self.p(0., 340.);
+        let k = 1. - self.p(0., GLIDE_MS);
         let cx = |b: Bounds<Pixels>| f32::from(b.origin.x) + f32::from(b.size.width) / 2.;
         ((cx(g) - cx(cur)) * k, f32::from(g.origin.y - cur.origin.y) * k, true)
     }
@@ -191,6 +207,13 @@ impl TakoApp {
             "fold" => self.fold_project(v, cx),
             "open" => self.open_thread(v.parse().unwrap_or(1), cx),
             "theme" => self.overlays.theme.open = true,
+            "view" => self.view = match { if std::env::var_os("TAKO_FRAMELOG").is_some() { eprintln!("-- view:{v} at {:?}", std::time::Instant::now()); } v } {
+                "chats" => View::Chats,
+                "settings" => View::Settings,
+                "auto" => View::Automations,
+                "plugins" => View::Plugins,
+                _ => View::Home,
+            },
             "profile" => self.overlays.profile.open = true,
             "tab" => {
                 let i: usize = v.parse().unwrap_or(0);
@@ -444,6 +467,38 @@ impl TakoApp {
         )
     }
 
+    /// The page being left, drawn over the new one and fading out (Home ⇄ Chats only).
+    fn render_nav_ghost(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let at = self.nav.at?;
+        let from = self.nav.from;
+        if !matches!((from, self.view), (View::Home, View::Chats) | (View::Chats, View::Home)) {
+            return None;
+        }
+        let p = (at.elapsed().as_secs_f32() * 1000. / GHOST_MS).clamp(0., 1.);
+        if p >= 1. {
+            return None;
+        }
+        let a = 1. - ease_snappy(p);
+        let t = cx.t();
+        self.nav.ghost = true;
+        let ghost = div().id("nav-ghost").absolute().top_0().bottom_0().left(px(52.)).right_0().bg(t.bg).opacity(a);
+        let el = if from == View::Home {
+            ghost.pt(px(44.)).pr(px(12.)).pb(px(12.)).child(self.render_home(window, cx)).into_any_element()
+        } else {
+            let mut row = ghost.flex();
+            if self.sidebar_open {
+                row = row.child(self.render_sidebar(window, cx));
+            }
+            row = row.child(div().flex_1().min_w_0().h_full().relative().children(self.render_bleed(cx)).child(self.render_chat(window, cx)));
+            if self.right_open {
+                row = row.child(self.render_right(window, cx));
+            }
+            row.into_any_element()
+        };
+        self.nav.ghost = false;
+        Some(el)
+    }
+
     pub fn is_empty_layout(&self) -> bool {
         self.view != View::Chats
     }
@@ -475,15 +530,12 @@ impl Render for TakoApp {
             }
         }
         if let Some(at) = self.nav.at {
-            if at.elapsed().as_millis() > 650 {
+            if at.elapsed().as_millis() > 420 {
                 self.nav.at = None;
             } else {
                 window.request_animation_frame();
             }
         }
-        // panels slide in from their side when the chat layout appears
-        let into_chats = view == View::Chats && self.nav.at.is_some() && self.nav.from != View::Chats;
-        let (pl, pr) = if into_chats { (self.nav.p(0., 280.), self.nav.p(40., 280.)) } else { (1., 1.) };
         let page_p = if matches!(view, View::Automations | View::Plugins | View::Settings | View::Stats) { self.nav.p(0., 260.) } else { 1. };
         let show_sidebar = !covered && !empty && self.sidebar_open;
         let show_right = !covered && !empty && self.right_open;
@@ -543,7 +595,7 @@ impl Render for TakoApp {
             .line_height(relative(1.21))
             .flex()
             .when(!covered, |d| d.child(self.render_rail(cx)))
-            .when(show_sidebar, |d| d.child(div().h_full().flex_none().relative().left(px(-14. * (1. - pl))).opacity(pl).child(self.render_sidebar(window, cx))))
+            .when(show_sidebar, |d| d.child(self.render_sidebar(window, cx)))
             .child(
                 div()
                     .flex_1()
@@ -554,7 +606,8 @@ impl Render for TakoApp {
                     .when(view == View::Chats && !covered, |d| d.children(self.render_bleed(cx)))
                     .child(div().size_full().relative().top(px(8. * (1. - page_p))).opacity(page_p).child(main)),
             )
-            .when(show_right, |d| d.child(div().h_full().flex_none().relative().left(px(14. * (1. - pr))).opacity(pr).child(self.render_right(window, cx))))
+            .when(show_right, |d| d.child(self.render_right(window, cx)))
+            .children((!covered).then(|| self.render_nav_ghost(window, cx)).flatten())
             .when(!covered, |d| d.child(self.render_titlebar(window, cx)))
             .children(self.render_overlays(window, cx))
             .children(self.render_new_project(window, cx))

@@ -156,7 +156,7 @@ fn level_color(t: &Theme, l: u32) -> Hsla {
 
 /// The mock's `rise` keyframes (opacity + 16px lift; the blur can't be done).
 fn rise<E: Styled>(el: E, enter: Instant, delay_ms: f32, fast: bool) -> E {
-    let (dur, lift, delay) = if fast { (320., 10., delay_ms * 0.6) } else { (1000., 16., delay_ms) };
+    let (dur, lift, delay) = if fast { (220., 8., delay_ms * 0.4) } else { (1000., 16., delay_ms) };
     let p = ((enter.elapsed().as_secs_f32() * 1000. - delay) / dur).clamp(0., 1.);
     let e = ease_snappy(p);
     el.relative().top(px(lift * (1. - e))).opacity(e)
@@ -177,15 +177,18 @@ impl TakoApp {
         let t = cx.t();
         // Element state lives only while it is rendered every frame, so this
         // instant is re-created each time Home is entered: replay the entrance.
-        let enter = *window.use_keyed_state("home-enter", cx, |_, _| Instant::now()).read(cx);
-        if enter != self.home.enter {
+        let ghost = self.nav.ghost;
+        // As the outgoing ghost, Home is drawn settled (no entrance replay).
+        let enter = if ghost { self.home.enter.checked_sub(Duration::from_secs(30)).unwrap_or(self.home.enter) } else { *window.use_keyed_state("home-enter", cx, |_, _| Instant::now()).read(cx) };
+        if !ghost && enter != self.home.enter {
             self.home.enter = enter;
             self.home.hover = None;
         }
         let ms = enter.elapsed().as_secs_f32() * 1000.;
         // intro (rise + reveal) and the light sweep (first 30% of each 9s cycle after 2.5s)
         let sweep_ph = ((ms - 2500.) / 9000.).max(0.).fract();
-        if ms < 1600. || (ms >= 2500. && sweep_ph < 0.30) {
+        if ghost {
+        } else if ms < 1600. || (ms >= 2500. && sweep_ph < 0.30) {
             window.request_animation_frame();
         } else if !self.home.wake {
             let wait = if ms < 2500. { 2500. - ms } else { (1. - sweep_ph) * 9000. };
@@ -201,7 +204,7 @@ impl TakoApp {
             .detach();
         }
 
-        let fast = self.home.fast;
+        let fast = self.home.fast && !ghost;
         let glide = fast && self.nav.entering_from(crate::app::View::Chats) && self.nav.glide.is_some();
         let composer = self.render_composer(true, window, cx).into_any_element();
         let card = self.render_home_stats(window, cx).into_any_element();
@@ -215,7 +218,7 @@ impl TakoApp {
             .rounded(px(12.))
             .overflow_hidden()
             .bg(t.bg)
-            .child(div().absolute().top_0().left_0().size_full().when(fast, |d| d.opacity(self.nav.p(0., 420.))).child(backdrop))
+            .child(div().absolute().top_0().left_0().size_full().child(backdrop))
             .child(
                 div()
                     .absolute()

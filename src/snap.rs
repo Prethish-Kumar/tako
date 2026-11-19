@@ -25,6 +25,20 @@ pub fn setup(app: &mut TakoApp, window: &mut Window, cx: &mut Context<TakoApp>) 
         cx.background_executor().timer(Duration::from_millis(300)).await;
         for a in acts.split(';').filter(|s| !s.is_empty()) {
             let a = a.to_string();
+            // shot:path — capture the current frame mid-script (filmstrips of transitions)
+            #[cfg(feature = "snap")]
+            if let Some(p) = a.strip_prefix("shot:") {
+                let p = p.to_string();
+                cx.update(|window, cx| {
+                    window.refresh();
+                    let _ = window.draw(cx);
+                    if let Ok(img) = window.render_to_image() {
+                        img.save(&p).ok();
+                    }
+                })
+                .ok();
+                continue;
+            }
             if let Some(w) = a.strip_prefix("wait:") {
                 let w: u64 = w.parse().unwrap_or(100);
                 cx.background_executor().timer(Duration::from_millis(w)).await;

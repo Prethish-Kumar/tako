@@ -500,8 +500,8 @@ impl TakoApp {
                 })
                 .when(!empty, |d| {
                     // coming from Home the conversation fades up behind the gliding composer
-                    let e = if self.nav.entering_from(crate::app::View::Home) { self.nav.p(70., 300.) } else { 1. };
-                    d.child(div().flex_1().min_h_0().flex().flex_col().relative().top(px(14. * (1. - e))).opacity(e).child(self.render_feed(window, cx)))
+                    let e = if self.nav.entering_from(crate::app::View::Home) && !self.nav.ghost { self.nav.p(0., 220.) } else { 1. };
+                    d.child(div().flex_1().min_h_0().flex().flex_col().relative().top(px(6. * (1. - e))).opacity(0.4 + 0.6 * e).child(self.render_feed(window, cx)))
                 })
                 .child(self.render_composer(false, window, cx))
                 .into_any_element()
@@ -779,7 +779,9 @@ impl TakoApp {
         // Record where this composer is laid out (unshifted) and, during a page switch,
         // start it where the other page's composer was.
         let slot = if home { self.nav.slot_home.clone() } else { self.nav.slot_chat.clone() };
-        let (gx, gy, shown) = self.nav.composer_offset(home);
+        // In the fading ghost, this (outgoing) composer travels the same path as the one gliding
+        // into the new page, so the two overlap and the copy simply fades off it.
+        let (gx, gy, shown) = if self.nav.ghost { self.nav.ghost_composer_offset(home) } else { self.nav.composer_offset(home) };
         if !shown {
             window.request_animation_frame(); // not measured yet: hide for one frame
         }

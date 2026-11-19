@@ -50,3 +50,9 @@ GPUI (`gpui-pre` 0.3.12) + gpui-component via `gpui-kit` 0.10.
 - Text inputs: `gpui_kit::component::input::{InputState, Input, TextareaState, Textarea}`.
 - Things GPUI can't do (backdrop blur, gradient-clipped text, CSS filters…): approximate,
   and note it in `GAPS.md` (append a bullet under your module's heading).
+
+## Profiling transitions
+- `TAKO_FRAMELOG=1` prints every frame gap over 9.5 ms (and `view:` switches) to stderr.
+- In a `TAKO_ACT` script, `view:home|chats|…` switches pages and `shot:path.png` captures
+  the current frame mid-script. In snapshot mode follow a switch with `draw` so the
+  transition starts then, e.g. `view:chats;draw;wait:90;shot:/tmp/f.png`.

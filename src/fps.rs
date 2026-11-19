@@ -21,6 +21,16 @@ impl Fps {
 impl Render for Fps {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let now = Instant::now();
+        // TAKO_FRAMELOG: print every slow frame interval (> 9.5ms) for profiling transitions
+        static LOG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *LOG.get_or_init(|| std::env::var_os("TAKO_FRAMELOG").is_some()) {
+            if let Some(prev) = self.frames.back() {
+                let dt = now.duration_since(*prev).as_secs_f32() * 1000.;
+                if dt > 9.5 {
+                    eprintln!("frame gap {dt:.1}ms at {:?}", now);
+                }
+            }
+        }
         self.frames.push_back(now);
         while self.frames.front().is_some_and(|t| now.duration_since(*t).as_secs_f32() > 1.) {
             self.frames.pop_front();

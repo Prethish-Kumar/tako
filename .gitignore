@@ -3,3 +3,4 @@
 !ref/*.png
 !ref/*.jpg
 /.claude/
+.DS_Store

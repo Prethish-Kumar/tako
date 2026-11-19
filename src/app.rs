@@ -58,6 +58,8 @@ pub fn bind_keys(cx: &mut App) {
     for i in 1..=9 {
         cx.bind_keys([KeyBinding::new(Box::leak(format!("cmd-{i}").into_boxed_str()), GoTab(i), None)]);
     }
+    // last, so the terminal's Escape outranks the global Dismiss binding
+    crate::tools::pty::bind_keys(cx);
 }
 
 /// Page-switch motion (the mock's VIEW TRANSITIONS): ~300ms, offsets + opacity only.

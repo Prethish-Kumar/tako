@@ -12,6 +12,7 @@ mod editor;
 mod emulator;
 mod markdown;
 mod picker;
+pub mod pty;
 mod terminal;
 mod whiteboard;
 
@@ -44,7 +45,9 @@ pub(crate) fn st<R>(f: impl FnOnce(&mut ToolsState) -> R) -> R {
 pub struct ToolsState {
     pub diff: HashMap<usize, diff::DiffState>,
     pub browser: HashMap<usize, browser::BrowserState>,
-    pub term: HashMap<usize, terminal::TermState>,
+    pub pty: HashMap<usize, Entity<pty::TermView>>,
+    /// The terminal tab last shown (focus moves into a terminal when its tab is switched to).
+    pub pty_active: Option<usize>,
     pub editor: HashMap<usize, editor::EditorTab>,
     pub md: HashMap<usize, markdown::MdState>,
     pub wb: HashMap<usize, whiteboard::WbState>,
@@ -330,8 +333,7 @@ pub fn act(app: &mut TakoApp, k: &str, v: &str, window: &mut Window, cx: &mut Co
         "term" => {
             let id = app.first_tab(TabKind::Terminal).unwrap_or_else(|| app.open_tool_tab(TabKind::Terminal, "Terminal", cx));
             app.chat.active_tab = id;
-            app.ensure_term(id, window, cx);
-            app.term_run(id, v.to_string(), cx);
+            app.term_run(id, v.to_string(), window, cx);
         }
         "url" => {
             let id = app.first_tab(TabKind::Browser).unwrap_or_else(|| app.open_tool_tab(TabKind::Browser, v, cx));

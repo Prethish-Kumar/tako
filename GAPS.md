@@ -212,3 +212,10 @@ scene ships a pre-blurred still (`assets/blur/*.png`, regenerate with
 `TAKO_EXPORT_BLUR=assets/blur cargo run`), drawn under the theme bg at (1 − bleed).
 The theme popover's "Backdrop in chat" slider sets bleed (persisted). User images would
 run through `scene::blur::blur_rgb` once on upload.
+
+## Terminal
+The Terminal tab is a real shell now: your login shell on a PTY, parsed by
+`alacritty_terminal` and painted on a GPUI canvas (`src/tools/pty.rs`). Colours (16 follow
+the theme, 256, truecolor), bold/italic/underline/inverse, wide glyphs, alt-screen apps
+(vim, less, htop), scrollback (wheel), bracketed paste (⌘V), ⌘K clear. ⌘-shortcuts stay the
+app's. Not yet: mouse selection/copy, mouse reporting, IME composition, link detection.

@@ -73,7 +73,7 @@ impl TakoApp {
             }
             // a fresh tool in a reused id
             s.browser.remove(&tab);
-            s.term.remove(&tab);
+            s.pty.remove(&tab);
             s.diff.remove(&tab);
             s.editor.remove(&tab);
             s.md.remove(&tab);

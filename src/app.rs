@@ -76,6 +76,7 @@ pub struct TakoApp {
     pub persist_last: Option<crate::persist::Saved>,
     pub persist_at: Option<std::time::Instant>,
     pub persist_json: String,
+    fps: Entity<crate::fps::Fps>,
 }
 
 impl TakoApp {
@@ -102,6 +103,7 @@ impl TakoApp {
             persist_last: None,
             persist_at: None,
             persist_json: String::new(),
+            fps: cx.new(|_| crate::fps::Fps::new()),
         };
         s.chat.load(&s.threads, s.active);
         s.restore_state(cx);
@@ -458,5 +460,6 @@ impl Render for TakoApp {
             .children(self.render_overlays(window, cx))
             .children(self.render_new_project(window, cx))
             .children(self.render_toast(window, cx))
+            .child(self.fps.clone())
     }
 }

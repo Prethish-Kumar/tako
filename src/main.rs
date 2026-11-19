@@ -4,6 +4,7 @@ mod assets;
 mod chat;
 mod ctx;
 mod data;
+mod fps;
 mod home;
 mod overlays;
 mod pages;

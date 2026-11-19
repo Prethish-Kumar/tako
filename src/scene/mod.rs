@@ -218,6 +218,10 @@ struct Live {
 struct Fade {
     passes: Rc<Vec<Pass>>,
     a: f64,
+    /// seconds for the fade-out
+    dur: f64,
+    /// the faded build's size in art pixels (for anchoring)
+    wh: (f64, f64),
     imgs: Vec<Arc<RenderImage>>,
 }
 
@@ -238,6 +242,8 @@ pub struct Backdrop {
     trash: Vec<Arc<RenderImage>>,
     /// A size change waiting to settle before the scene is rebuilt.
     pending: Option<((usize, usize, u32), Instant)>,
+    /// Already built the display-size cover for this resize (don't build again until it settles).
+    grown: bool,
 }
 
 impl Backdrop {
@@ -257,11 +263,12 @@ impl Backdrop {
             extract_at: None,
             trash: vec![],
             pending: None,
+            grown: false,
         }
     }
 
     /// Build (or rebuild) the wanted scene for the measured size.
-    fn ensure_built(&mut self, sf: f32, light: bool) -> bool {
+    fn ensure_built(&mut self, sf: f32, light: bool, disp: Option<(f32, f32)>) -> bool {
         let Some(b) = self.bounds.get() else { return false };
         let inf = info(self.want);
         let unit = inf.px as f32;
@@ -275,34 +282,56 @@ impl Backdrop {
         if inf.id == "valley" {
             valley::set_light(light);
         }
+        // What to build and how to hand over from the old build.
+        let (mut bw, mut bh) = (w, h);
+        let mut fade_dur = 0.9;
+        let mut settle = true;
         if let Some(l) = &self.live {
             if l.info.id == inf.id && l.key == key {
                 self.pending = None;
                 return false;
             }
-            // Same scene, new size (window resize / fullscreen animation): keep drawing the
-            // current build, stretched to cover, and rebuild once the size has settled —
-            // rebuilding on every frame of the resize is what flickered.
-            if l.info.id == inf.id {
-                match self.pending {
-                    Some((k, since)) if k == key && since.elapsed().as_millis() >= 150 => {}
-                    Some((k, _)) if k == key => return false,
-                    _ => {
+            // Same scene, new size (window resize / maximize / fullscreen). The art is never
+            // scaled: it's drawn at its native pixel size, anchored bottom-centre, so a resize
+            // only crops or reveals. Rebuilding every frame flickered and stretching jittered.
+            if l.info.id == inf.id && l.key.2 == key.2 {
+                let settled = matches!(self.pending, Some((k, since)) if k == key && since.elapsed().as_millis() >= 150);
+                if settled {
+                    fade_dur = 0.3;
+                } else {
+                    if !matches!(self.pending, Some((k, _)) if k == key) {
                         self.pending = Some((key, Instant::now()));
-                        return false;
                     }
+                    if self.grown || (l.vp.w as usize >= w && l.vp.h as usize >= h) {
+                        return false; // the current build still covers the card
+                    }
+                    // Growing past the build: build once at the display size so it covers any
+                    // size the window can reach, crossfade to it, and settle later.
+                    if let Some((dw, dh)) = disp {
+                        bw = bw.max((dw / unit).ceil() as usize);
+                        bh = bh.max((dh / unit).ceil() as usize);
+                    }
+                    fade_dur = 0.25;
+                    settle = false;
+                    self.grown = true;
                 }
             }
         }
-        self.pending = None;
+        if settle {
+            self.pending = None;
+            self.grown = false;
+        }
+        let key = (bw, bh, key.2);
+        let (w, h) = (bw, bh);
         let scene_changed = self.live.as_ref().map(|l| l.info.id != inf.id).unwrap_or(true);
         if let Some(old) = self.live.take() {
-            if old.info.id != inf.id && !self.passes.is_empty() {
-                // snapshot the last frame and fade it out over the new scene (0.9s)
+            if !self.passes.is_empty() {
+                // snapshot the last frame and fade it out over the new build
                 if let Some(f) = self.fade.take() {
                     self.trash.extend(f.imgs);
                 }
-                self.fade = Some(Fade { passes: std::mem::take(&mut self.passes), a: 1., imgs: old.imgs });
+                let wh = (old.vp.w, old.vp.h);
+                self.fade = Some(Fade { passes: std::mem::take(&mut self.passes), a: 1., dur: fade_dur, wh, imgs: old.imgs });
             } else {
                 self.trash.extend(old.imgs);
             }
@@ -349,15 +378,15 @@ impl Render for Backdrop {
         self.last = Some(now);
         let sf = window.scale_factor();
         let light = cx.t().light;
-        let just_built = self.ensure_built(sf, light);
+        let disp = window.display(cx).map(|d| {
+            let s = d.bounds().size;
+            (f32::from(s.width), f32::from(s.height))
+        });
+        let just_built = self.ensure_built(sf, light, disp);
 
         let mut unit = 3f32;
         if let (Some(b), Some(live)) = (self.bounds.get(), self.live.as_mut()) {
             unit = live.info.px as f32;
-            // while a resize settles, stretch the last build so it still covers the card
-            let (bw, bh) = (live.vp.w as f32 * unit, live.vp.h as f32 * unit);
-            let cover = (f32::from(b.size.width) / bw).max(f32::from(b.size.height) / bh).max(1.);
-            unit *= cover;
             // mouse parallax: target from the pointer over the card, eased + a slow drift
             let m = window.mouse_position();
             let (tx, ty) = if b.contains(&m) {
@@ -388,7 +417,7 @@ impl Render for Backdrop {
             }
         }
         if let Some(f) = &mut self.fade {
-            f.a -= dt / 0.9;
+            f.a -= dt / f.dur;
             if f.a <= 0. {
                 let f = self.fade.take().unwrap();
                 self.trash.extend(f.imgs);
@@ -402,13 +431,25 @@ impl Render for Backdrop {
         let t = cx.t();
         let cell = self.bounds.clone();
         let trash = std::mem::take(&mut self.trash);
-        let pass_el = |passes: &Rc<Vec<Pass>>, i: usize| {
+        let pass_el = |passes: &Rc<Vec<Pass>>, i: usize, wh: (f64, f64)| {
             let ps = passes.clone();
+            // Native pixel size, anchored bottom-centre (crop, never stretch). Only if a build
+            // is somehow smaller than the card (no display info), scale it up to cover.
+            let place = move |b: Bounds<Pixels>| {
+                let (aw, ah) = (wh.0 as f32 * unit, wh.1 as f32 * unit);
+                let k = (f32::from(b.size.width) / aw).max(f32::from(b.size.height) / ah).max(1.);
+                let (aw, ah) = (aw * k, ah * k);
+                let o = point(b.origin.x + px((f32::from(b.size.width) - aw) / 2.), b.origin.y + px(f32::from(b.size.height) - ah));
+                (Bounds { origin: o, size: size(px(aw), px(ah)) }, unit * k)
+            };
             div()
                 .absolute()
                 .inset_0()
                 .when(ps[i].opacity < 1., |d| d.opacity(ps[i].opacity))
-                .child(canvas(|_, _, _| (), move |b, _, window, _| px::paint_ops(&ps[i].ops, b, unit, window)).size_full())
+                .child(canvas(|_, _, _| (), move |b, _, window, _| {
+                    let (b, u) = place(b);
+                    px::paint_ops(&ps[i].ops, b, u, window)
+                }).size_full())
         };
         let mut root = div()
             .size_full()
@@ -428,14 +469,15 @@ impl Render for Backdrop {
                 .absolute()
                 .size_full(),
             );
+        let live_wh = self.live.as_ref().map(|l| (l.vp.w, l.vp.h)).unwrap_or((1., 1.));
         for i in 0..self.passes.len() {
-            root = root.child(pass_el(&self.passes, i));
+            root = root.child(pass_el(&self.passes, i, live_wh));
         }
         if let Some(f) = &self.fade {
             let a = f.a as f32;
             let mut ov = div().absolute().inset_0().opacity(a * a * (3. - 2. * a));
             for i in 0..f.passes.len() {
-                ov = ov.child(pass_el(&f.passes, i));
+                ov = ov.child(pass_el(&f.passes, i, f.wh));
             }
             root = root.child(ov);
         }

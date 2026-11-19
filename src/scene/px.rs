@@ -340,7 +340,7 @@ pub enum Op {
     /// art-space rect with straight-alpha colour (0..1)
     Rect { x: f32, y: f32, w: f32, h: f32, c: [f32; 4] },
     /// image drawn into `dst` (art space), optionally clipped to `clip`
-    Img { img: Rc<Img>, dst: [f32; 4], clip: Option<[f32; 4]> },
+    Img { img: Rc<Img>, dst: [f32; 4], clip: Option<[f32; 4]>, add: bool },
 }
 
 #[derive(Clone)]
@@ -354,6 +354,8 @@ pub struct Pass {
 /// GPUI applies opacity per element.
 pub struct Frame {
     pub passes: Vec<Pass>,
+    /// While set, image draws blend additively (the mock's `globalCompositeOperation = "lighter"`).
+    pub additive: bool,
     pub fill: C3,
     pub alpha: f64,
     snap: f64,
@@ -361,7 +363,7 @@ pub struct Frame {
 }
 impl Frame {
     pub fn new(snap: f64) -> Self {
-        Frame { passes: vec![Pass { opacity: 1., ops: vec![] }], fill: [0, 0, 0], alpha: 1., snap, pass_op: 1. }
+        Frame { passes: vec![Pass { opacity: 1., ops: vec![] }], additive: false, fill: [0, 0, 0], alpha: 1., snap, pass_op: 1. }
     }
     fn sn(&self, v: f64) -> f32 {
         (jround(v * self.snap) / self.snap) as f32
@@ -426,7 +428,8 @@ impl Frame {
         }
         let prev = self.pass_op;
         let op = ((opacity.min(1.) * 1000.).round() / 1000.) as f32 * prev;
-        self.cur(op).push(Op::Img { img: img.clone(), dst, clip });
+        let add = self.additive;
+        self.cur(op).push(Op::Img { img: img.clone(), dst, clip, add });
         if op != prev {
             self.passes.push(Pass { opacity: prev, ops: vec![] });
         }
@@ -456,13 +459,14 @@ pub fn paint_ops(ops: &[Op], bounds: Bounds<Pixels>, unit: f32, window: &mut Win
                 let col: Hsla = Rgba { r: c[0], g: c[1], b: c[2], a: c[3] }.into();
                 window.paint_quad(fill(r(*x, *y, *w, *h), col));
             }
-            Op::Img { img, dst, clip } => {
+            Op::Img { img, dst, clip, add } => {
                 let ib = r(dst[0], dst[1], dst[2], dst[3]);
                 let b = match clip {
                     Some(c) => r(c[0], c[1], c[2], c[3]),
                     None => ib,
                 };
-                window.paint_image(b, ib, Corners::default(), img.img.clone(), 0, false).ok();
+                // `grayscale` is repurposed by the patched Metal renderer as "blend additively"
+                window.paint_image(b, ib, Corners::default(), img.img.clone(), 0, *add && cfg!(target_os = "macos")).ok();
             }
         }
     }
@@ -472,13 +476,17 @@ pub fn paint_ops(ops: &[Op], bounds: Bounds<Pixels>, unit: f32, window: &mut Win
 /// the theme's Auto extraction (the mock reads the canvas back).
 pub fn composite(passes: &[Pass], w: usize, h: usize) -> Vec<[f32; 3]> {
     let mut out = vec![[0f32; 3]; w * h];
-    let mut blend = |x: i64, y: i64, c: [f32; 3], a: f32| {
+    let mut blend = |x: i64, y: i64, c: [f32; 3], a: f32, add: bool| {
         if x < 0 || y < 0 || x >= w as i64 || y >= h as i64 || a <= 0. {
             return;
         }
         let p = &mut out[y as usize * w + x as usize];
         for i in 0..3 {
-            p[i] += (c[i] - p[i]) * a.min(1.);
+            if add {
+                p[i] = (p[i] + c[i] * a).min(1.);
+            } else {
+                p[i] += (c[i] - p[i]) * a.min(1.);
+            }
         }
     };
     for pass in passes {
@@ -489,11 +497,12 @@ pub fn composite(passes: &[Pass], w: usize, h: usize) -> Vec<[f32; 3]> {
                     let (x1, y1) = ((x + rw).round() as i64, (y + rh).round() as i64);
                     for yy in y0..y1.max(y0 + 1) {
                         for xx in x0..x1.max(x0 + 1) {
-                            blend(xx, yy, [c[0], c[1], c[2]], c[3] * pass.opacity);
+                            blend(xx, yy, [c[0], c[1], c[2]], c[3] * pass.opacity, false);
                         }
                     }
                 }
-                Op::Img { img, dst, clip } => {
+                Op::Img { img, dst, clip, add } => {
+                    let add = *add;
                     let [dx, dy, dw, dh] = *dst;
                     let (mut cx0, mut cy0, mut cx1, mut cy1) = (dx, dy, dx + dw, dy + dh);
                     if let Some([a, b, c, d]) = clip {
@@ -511,7 +520,8 @@ pub fn composite(passes: &[Pass], w: usize, h: usize) -> Vec<[f32; 3]> {
                                 continue;
                             }
                             let p = l.get(u as usize, v as usize);
-                            blend(xx, yy, [p[0] as f32 / 255., p[1] as f32 / 255., p[2] as f32 / 255.], p[3] as f32 / 255. * pass.opacity);
+                            let (c, a) = ([p[0] as f32 / 255., p[1] as f32 / 255., p[2] as f32 / 255.], p[3] as f32 / 255. * pass.opacity);
+                            blend(xx, yy, c, a, add);
                         }
                     }
                 }

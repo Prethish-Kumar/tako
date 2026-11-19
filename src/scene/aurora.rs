@@ -449,7 +449,9 @@ impl Scene for Aurora {
             }
             f.set_pass(a as f64 / 8.);
             for (dst, clip) in g {
+                f.additive = true;
                 f.image_dst(ray, *dst, Some(*clip), 1.);
+                f.additive = false;
             }
         }
         f.set_pass(1.);
@@ -471,7 +473,9 @@ impl Scene for Aurora {
                 }
                 let sxf = sx as f64;
                 let c0 = (sx & 3) as f64;
+                f.additive = true;
                 f.image_dst(lg, [(sxf - c0) as f32, ly as f32, 4., self.lh as f32], Some([sxf as f32, ly as f32, 1., self.lh as f32]), 1.);
+                f.additive = false;
             }
         }
         f.set_pass(1.);
@@ -492,7 +496,9 @@ impl Scene for Aurora {
         f.px(v, w.x, w.y + (w.h / 2.).floor(), 0.6, w.w, 1.);
         let wg = self.win_glow.as_ref().unwrap();
         let (gx, gy) = v.at(w.x + w.w / 2. - wg.w / 2., w.y + w.h / 2. - wg.h * 0.42, 0.6);
+        f.additive = true;
         f.image(wg, gx, gy, 0.5 + fl * 0.3);
+        f.additive = false;
         f.fill_hex("#8a96c4");
         for s in &self.smoke {
             let fa = s.age / s.life;

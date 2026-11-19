@@ -528,7 +528,9 @@ impl Scene for Neon {
         for (i, s) in self.signs.iter().enumerate() {
             let (x, y) = v.at(s.x, s.y, 0.3);
             if s.on {
+                f.additive = true;
                 f.image(&s.g, x - s.m, y - s.m, if i == 0 { 0.9 } else { 0.75 });
+                f.additive = false;
             }
             f.fill(if s.on { s.col } else { s.dim });
             for &(i, j) in &s.pts {
@@ -545,7 +547,9 @@ impl Scene for Neon {
         }
         f.layer(v, self.fg.as_ref().unwrap(), 0.6, 1.);
         for (i, c) in self.spills.iter().enumerate() {
+            f.additive = true;
             f.layer(v, c, 0.6, if self.signs[i].on { 1. } else { 0.35 });
+            f.additive = false;
         }
         // puddle reflections, shimmering in the rain
         for p in &self.puddles {

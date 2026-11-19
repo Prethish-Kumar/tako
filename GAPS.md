@@ -6,8 +6,14 @@ Running list of things that could not be matched 1:1, and what was done instead.
 
 Almost every gap below comes from one of these:
 
-1. **No additive / screen blending.** Glows, god rays, aurora, neon and the wipe's glowing
-   cells use normal alpha blending, so they read a bit flatter than the mock's `lighter`.
+1. **Additive blending — solved on macOS with a patched renderer.** GPUI's pipelines only
+   alpha-blend, so `vendor/gpui-pre-apple` (wired via `[patch.crates-io]`) adds an additive
+   sprite pipeline (One, One) and repurposes the sprite `grayscale` bit as "additive". The
+   scenes and onboarding mark the mock's `lighter` draws (`Frame::additive`), so rays, aurora,
+   sign glows, spills and glow sprites add light like the mock. Windows/Linux use GPUI's other
+   renderer and fall back to normal blending. The onboarding wipe's glowing cells are quads
+   (not sprites), so they still blend normally.
+
 2. **No CSS `filter: blur()` or `transform: scale()` on elements.** The mock runs in its
    *flat* style, which sets `backdrop-filter: none` on every element, so the mock has no
    frosted panels to match. What remains is the brief `blur(8px)`→0 on a few entrance

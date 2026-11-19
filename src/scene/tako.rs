@@ -252,8 +252,10 @@ impl Scene for Tako {
     fn draw(&self, v: &Vp, t: f64, f: &mut Frame) {
         let Some(water) = &self.water else { return };
         f.layer(v, water, 0.04, 1.);
-        // "lighter" isn't available: source-over at a slightly boosted alpha instead
-        f.layer(v, self.rays.as_ref().unwrap(), 0.18, ((0.6 + 0.2 * (t * 0.45).sin()) * 1.25).min(1.));
+        // the mock's "lighter": additive via the patched renderer
+        f.additive = true;
+        f.layer(v, self.rays.as_ref().unwrap(), 0.18, 0.6 + 0.2 * (t * 0.45).sin());
+        f.additive = false;
         let (sx0, sy0) = v.at(0., v.y(0.03), 0.08);
         let (hi, lo) = (hex("#d4f0ff"), hex("#3f8ad8"));
         // surface shimmer: draw the light row then the dark row so runs can merge

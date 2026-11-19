@@ -93,14 +93,16 @@ impl Glows {
             .collect();
         Glows { imgs }
     }
-    /// The mock's `drawGlow(sp, x, y, r, a)` ("lighter" → source-over, see GAPS.md).
+    /// The mock's `drawGlow(sp, x, y, r, a)` — additive ("lighter") via the patched renderer.
     pub fn draw(&self, f: &mut Frame, g: Gl, x: f64, y: f64, r: f64, a: f64) {
         let lv = (clamp(a) * GL_LEVELS as f64).round() as usize;
         if lv == 0 {
             return;
         }
         let img = &self.imgs[g as usize][lv - 1];
+        f.additive = true;
         f.image_dst(img, [(x - r) as f32, (y - r) as f32, (r * 2.) as f32, (r * 2.) as f32], None, 1.);
+        f.additive = false;
     }
 }
 
@@ -660,8 +662,10 @@ impl Story {
         let px = |f: &mut Frame, x: f64, y: f64, ww: f64, hh: f64| f.rect(jround(x), jround(y), ww, hh);
         f.alpha = 1.;
         f.image(bg, -P + self.sh(0.1), self.shy(0.1) - P * 0.5, 1.);
-        // rays breathe ("lighter" → source-over at a slightly boosted alpha)
-        f.image(rays, -P + self.sh(0.2) + (t * 0.2).sin() * 2., self.shy(0.2) - P * 0.5, ((0.38 + 0.14 * (t * 0.5).sin()) * 1.25).min(1.));
+        // rays breathe (the mock's "lighter", additive)
+        f.additive = true;
+        f.image(rays, -P + self.sh(0.2) + (t * 0.2).sin() * 2., self.shy(0.2) - P * 0.5, 0.38 + 0.14 * (t * 0.5).sin());
+        f.additive = false;
         // surface shimmer
         let (hi, lo) = (hex("#c8ecff"), hex("#4aa3e8"));
         for pass in 0..2 {

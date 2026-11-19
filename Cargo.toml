@@ -23,3 +23,7 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# Tako patch: the Metal renderer with an additive sprite pipeline (CSS "lighter" blending).
+[patch.crates-io]
+gpui-pre-apple = { path = "vendor/gpui-pre-apple" }

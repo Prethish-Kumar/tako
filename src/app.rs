@@ -300,20 +300,6 @@ impl TakoApp {
             .flex()
             .items_center()
             .gap(px(2.))
-            .child(
-                b("tb-theme", "palette")
-                    .relative()
-                    // record the button's bounds so the theme popover anchors under it
-                    .child({
-                        let anchor = self.overlays.theme.anchor.clone();
-                        canvas(move |bounds, _, _| anchor.set(Some(bounds)), |_, _, _, _| {}).absolute().top_0().left_0().size_full()
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.overlays.theme.open = !this.overlays.theme.open;
-                        cx.notify();
-                    })),
-            )
-            .child(b("tb-term", "term"))
             .child(b("tb-panel", "panel-r").on_click(cx.listener(|this, _, _, cx| {
                 this.right_open = !this.right_open;
                 cx.notify();
@@ -350,6 +336,19 @@ impl TakoApp {
             .child(btn("rail-auto", "bolt", view == View::Automations).on_click(cx.listener(|this, _, _, cx| this.go(View::Automations, cx))))
             .child(btn("rail-plugins", "plug", view == View::Plugins).on_click(cx.listener(|this, _, _, cx| this.go(View::Plugins, cx))))
             .child(div().flex_1())
+            .child(
+                btn("rail-theme", "palette", self.overlays.theme.open)
+                    .relative()
+                    // record the button's bounds so the theme popover anchors beside it
+                    .child({
+                        let anchor = self.overlays.theme.anchor.clone();
+                        canvas(move |bounds, _, _| anchor.set(Some(bounds)), |_, _, _, _| {}).absolute().top_0().left_0().size_full()
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.overlays.theme.open = !this.overlays.theme.open;
+                        cx.notify();
+                    })),
+            )
             .child(btn("rail-settings", "gear", view == View::Settings).on_click(cx.listener(|this, _, _, cx| this.go(View::Settings, cx))))
             .child(self.render_usage_ring(cx))
             .child(
@@ -377,6 +376,25 @@ impl TakoApp {
                         cx.notify();
                     })),
             )
+    }
+
+    /// The chat pane's backdrop bleed: the scene's pre-blurred still, under the theme bg
+    /// at (1 - bleed) opacity. Not live — GPUI has no backdrop-filter (see scene/blur.rs).
+    fn render_bleed(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let t = cx.t();
+        let bleed = cx.global::<ThemeState>().bleed;
+        if bleed <= 0.001 {
+            return None;
+        }
+        let im = crate::scene::blur::blurred(self.scene.id, t.light);
+        Some(
+            div()
+                .absolute()
+                .inset_0()
+                .child(img(ImageSource::Render(im)).absolute().inset_0().size_full().object_fit(ObjectFit::Cover))
+                .child(div().absolute().inset_0().bg(t.bg.opacity(1. - bleed)))
+                .into_any_element(),
+        )
     }
 
     pub fn is_empty_layout(&self) -> bool {
@@ -461,6 +479,7 @@ impl Render for TakoApp {
                     .h_full()
                     .relative()
                     .when(view == View::Home, |d| d.pt(px(44.)).pr(px(12.)).pb(px(12.)))
+                    .when(view == View::Chats && !covered, |d| d.children(self.render_bleed(cx)))
                     .child(main),
             )
             .when(show_right, |d| d.child(self.render_right(window, cx)))

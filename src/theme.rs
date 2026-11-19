@@ -264,6 +264,8 @@ pub struct ThemeState {
     pub pal: String, // "auto" | preset id
     pub light: bool,
     pub auto: Option<Spec>,
+    /// How much of the blurred backdrop shows through the chat pane (0 = solid bg).
+    pub bleed: f32,
     pub current: Theme,
     from: Theme,
     target: Theme,
@@ -277,7 +279,7 @@ impl ThemeState {
         // Default the Auto extraction to what the Tako scene yields in the mock.
         let auto = Some(Spec { accent: [101., 147., 216.], second: [51., 29., 113.], tint: (214., 0.3), light: false });
         let t = Theme::from_spec(auto.unwrap());
-        ThemeState { pal: "auto".into(), light: false, auto, current: t, from: t, target: t, started: None }
+        ThemeState { pal: "auto".into(), light: false, auto, bleed: 0.3, current: t, from: t, target: t, started: None }
     }
     pub fn spec(&self) -> Option<Spec> {
         if self.pal == "auto" {

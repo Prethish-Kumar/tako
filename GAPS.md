@@ -205,3 +205,10 @@ child view would also sit above every GPUI popover.
   wipe (the mock's home scene switch does the same).
 - The intro opens on first launch (flag in `~/.config/tako/onboarded`) and on Replay.
 - Reduce motion: tweens jump to their end; the story itself still animates.
+
+## Chat backdrop bleed
+GPUI has no `backdrop-filter`, so the chat pane can't blur what's behind it live. Each
+scene ships a pre-blurred still (`assets/blur/*.png`, regenerate with
+`TAKO_EXPORT_BLUR=assets/blur cargo run`), drawn under the theme bg at (1 − bleed).
+The theme popover's "Backdrop in chat" slider sets bleed (persisted). User images would
+run through `scene::blur::blur_rgb` once on upload.

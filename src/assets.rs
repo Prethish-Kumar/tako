@@ -11,6 +11,11 @@ struct Local;
 
 pub struct Assets;
 
+/// A bundled file by path (e.g. `blur/tako.png`).
+pub fn get(path: &str) -> Option<Cow<'static, [u8]>> {
+    Local::get(path).map(|f| f.data)
+}
+
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         if let Some(f) = Local::get(path) {

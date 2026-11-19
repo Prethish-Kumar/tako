@@ -13,6 +13,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 pub struct Saved {
     pub pal: String,
     pub light: bool,
+    pub bleed: Option<f32>,
     pub scene: String,
     pub sidebar_open: bool,
     pub right_open: bool,
@@ -55,6 +56,7 @@ impl TakoApp {
         Saved {
             pal: ts.pal.clone(),
             light: ts.light,
+            bleed: Some(ts.bleed),
             scene: self.scene.id.to_string(),
             sidebar_open: self.sidebar_open,
             right_open: self.right_open,
@@ -89,6 +91,9 @@ impl TakoApp {
         let Ok(sv) = serde_json::from_str::<Saved>(&text) else { return };
         {
             let ts = cx.global_mut::<ThemeState>();
+            if let Some(b) = sv.bleed {
+                ts.bleed = b.clamp(0., 1.);
+            }
             if !sv.pal.is_empty() {
                 ts.pal = sv.pal.clone();
                 ts.light = sv.light;

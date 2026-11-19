@@ -13,13 +13,16 @@ pub struct ThemePopState {
     /// Window bounds of the titlebar palette button, when the titlebar records them
     /// (see GAPS.md). Falls back to the empty-layout position.
     pub anchor: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// The bleed slider's track bounds and whether it's being dragged.
+    track: Rc<Cell<Option<Bounds<Pixels>>>>,
+    drag: Rc<Cell<bool>>,
     shown: bool,
     tween: Option<(bool, Tween)>,
 }
 
 impl ThemePopState {
     pub fn new(_window: &mut Window, _cx: &mut Context<TakoApp>) -> Self {
-        ThemePopState { open: false, anchor: Rc::default(), shown: false, tween: None }
+        ThemePopState { open: false, anchor: Rc::default(), track: Rc::default(), drag: Rc::default(), shown: false, tween: None }
     }
 }
 
@@ -208,6 +211,10 @@ pub fn set_pal(cx: &mut App, pal: &str) {
     ts.pal = pal.to_string();
     ts.apply();
 }
+/// Chat-pane backdrop opacity (0..1).
+pub fn set_bleed(cx: &mut App, v: f32) {
+    cx.global_mut::<ThemeState>().bleed = (v * 100.).round().clamp(0., 100.) / 100.;
+}
 pub fn set_mode(cx: &mut App, light: bool) {
     let ts = cx.global_mut::<ThemeState>();
     if ts.pal == "auto" {
@@ -215,6 +222,9 @@ pub fn set_mode(cx: &mut App, light: bool) {
     }
     ts.light = light;
     ts.apply();
+}
+fn ts_bleed(cx: &App) -> f32 {
+    cx.global::<ThemeState>().bleed
 }
 /// Whether the effective appearance is light (Auto decides from the backdrop).
 pub fn is_light(ts: &ThemeState) -> bool {
@@ -227,13 +237,14 @@ impl TakoApp {
         let st = &mut self.overlays.theme;
         let vis = pop_progress(st.open, &mut st.shown, &mut st.tween, 220., window)?;
         let t = cx.t();
-        let vw = f32::from(window.viewport_size().width);
-        // place(): top = btn.bottom + 8, right = innerWidth - btn.right - 4
+        let vh = f32::from(window.viewport_size().height);
+        // Opens beside the rail's palette button (bottom-left), bottoms aligned.
         let anchor = st.anchor.get();
-        let (top, right) = match anchor {
-            Some(b) => (f32::from(b.bottom()) + 8., (vw - f32::from(b.right()) - 4.).max(8.)),
-            None => (44., 70.),
+        let (left, bottom) = match anchor {
+            Some(b) => (f32::from(b.right()) + 10., (vh - f32::from(b.bottom())).max(8.)),
+            None => (62., 96.),
         };
+        let (track, drag) = (st.track.clone(), st.drag.clone());
         let ts = cx.global::<ThemeState>();
         let pal = ts.pal.clone();
         let mode_light = ts.light;
@@ -321,13 +332,82 @@ impl TakoApp {
                 .on_click(move |_, _, cx| set_mode(cx, light))
         };
 
+        let bleed = ts_bleed(cx);
+        let slider = {
+            let (tr, dr) = (track.clone(), drag.clone());
+            let (tr2, dr2) = (track.clone(), drag.clone());
+            let ent = cx.entity().downgrade();
+            let from_x = move |b: Bounds<Pixels>, x: Pixels| f32::from(x - b.origin.x) / f32::from(b.size.width).max(1.);
+            div()
+                .id("tp-bleed")
+                .h(px(22.))
+                .mx(px(4.))
+                .relative()
+                .flex()
+                .items_center()
+                .cursor_pointer()
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(4.))
+                        .rounded_full()
+                        .bg(t.surface_active)
+                        .child(div().h_full().w(relative(bleed)).rounded_full().bg(t.accent)),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .top(px(4.))
+                        .left(relative(bleed))
+                        .ml(px(-7.))
+                        .size(px(14.))
+                        .rounded_full()
+                        .bg(white())
+                        .shadow(vec![BoxShadow { color: hsla(0., 0., 0., 0.35), offset: point(px(0.), px(1.)), blur_radius: px(3.), spread_radius: px(0.), inset: false }]),
+                )
+                .child(
+                    // records the track and, while dragging, follows the mouse window-wide
+                    canvas(
+                        move |b, _, _| tr.set(Some(b)),
+                        move |_, _, window, _| {
+                            if !dr.get() {
+                                return;
+                            }
+                            let (tr, dr, dr_up) = (tr2.clone(), dr2.clone(), dr2.clone());
+                            let ent = ent.clone();
+                            window.on_mouse_event::<MouseMoveEvent>(move |ev, phase, window, cx| {
+                                if phase != DispatchPhase::Bubble || !dr.get() {
+                                    return;
+                                }
+                                if let Some(b) = tr.get() {
+                                    set_bleed(cx, from_x(b, ev.position.x));
+                                    ent.update(cx, |_, cx| cx.notify()).ok();
+                                    window.refresh();
+                                }
+                            });
+                            window.on_mouse_event::<MouseUpEvent>(move |_, _, _, _| dr_up.set(false));
+                        },
+                    )
+                    .absolute()
+                    .inset_0(),
+                )
+                .on_mouse_down(MouseButton::Left, cx.listener(move |_, ev: &MouseDownEvent, window, cx| {
+                    if let Some(b) = track.get() {
+                        set_bleed(cx, from_x(b, ev.position.x));
+                    }
+                    drag.set(true);
+                    window.refresh();
+                    cx.notify();
+                }))
+        };
+
         let palette_btn = anchor;
         let el = div()
             .id("theme-pop")
             .occlude()
             .absolute()
-            .top(px(top - 6. * (1. - vis)))
-            .right(px(right))
+            .bottom(px(bottom - 6. * (1. - vis)))
+            .left(px(left))
             // the mock's scale(.98) → 1, approximated by growing the box from its top-right anchor
             .w(px(296. * (0.98 + 0.02 * vis)))
             .p(px(10.))
@@ -339,8 +419,8 @@ impl TakoApp {
             .opacity(vis)
             .on_mouse_down_out(cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
                 // Leave clicks on the palette button to its own toggle.
-                let vw = f32::from(window.viewport_size().width);
-                let btn = palette_btn.unwrap_or(Bounds::new(point(px(vw - 102.), px(8.)), size(px(28.), px(28.))));
+                let vh = f32::from(window.viewport_size().height);
+                let btn = palette_btn.unwrap_or(Bounds::new(point(px(8.), px(vh - 130.)), size(px(36.), px(36.))));
                 if !btn.contains(&ev.position) {
                     this.overlays.theme.open = false;
                     cx.notify();
@@ -360,7 +440,20 @@ impl TakoApp {
                     .bg(t.surface)
                     .child(seg_btn("tp-dark", "moon", "Dark", !light_on, false))
                     .child(seg_btn("tp-light", "sun", "Light", light_on, true)),
-            );
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .text_size(px(11.5))
+                    .text_color(t.text_3)
+                    .pt(px(12.))
+                    .px(px(4.))
+                    .pb(px(4.))
+                    .child("Backdrop in chat")
+                    .child(div().font_family(MONO).text_color(t.text_2).child(format!("{:.0}%", bleed * 100.))),
+            )
+            .child(slider);
         Some(el.into_any_element())
     }
 }
@@ -371,6 +464,7 @@ pub fn act(_app: &mut TakoApp, k: &str, v: &str, _window: &mut Window, cx: &mut 
     match k {
         "pal" => set_pal(cx, v),
         "mode" => set_mode(cx, v == "light"),
+        "bleed" => set_bleed(cx, v.parse::<f32>().unwrap_or(30.) / 100.),
         _ => return false,
     }
     true

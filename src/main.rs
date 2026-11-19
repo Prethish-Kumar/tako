@@ -21,6 +21,10 @@ mod ui;
 use gpui_kit::*;
 
 fn main() {
+    if let Ok(dir) = std::env::var("TAKO_EXPORT_BLUR") {
+        scene::blur::export(&dir);
+        return;
+    }
     gpui_kit::application().with_assets(assets::Assets).run(|cx| {
         gpui_kit::init(cx);
         assets::load_fonts(cx);

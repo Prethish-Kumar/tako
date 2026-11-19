@@ -16,6 +16,7 @@ use gpui_kit::*;
 use std::{cell::Cell, rc::Rc, sync::Arc, time::Instant};
 
 pub mod aurora;
+pub mod blur;
 pub mod extract;
 pub mod glade;
 pub mod neon;
